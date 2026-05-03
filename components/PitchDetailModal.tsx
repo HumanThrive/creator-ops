@@ -15,11 +15,11 @@ const CATEGORIES: PitchCategory[] = [
   'not_a_pitch',
 ]
 
-const STAGES: { value: PipelineStage; label: string }[] = [
-  { value: 'inbox', label: 'Inbox' },
-  { value: 'negotiating', label: 'Negotiating' },
-  { value: 'confirmed', label: 'Confirmed' },
-  { value: 'delivered_paid', label: 'Delivered & Paid' },
+const STAGES: { value: PipelineStage; label: string; variant: string }[] = [
+  { value: 'inbox', label: 'Inbox', variant: 'inbox' },
+  { value: 'negotiating', label: 'Negotiating', variant: 'negotiating' },
+  { value: 'confirmed', label: 'Confirmed', variant: 'confirmed' },
+  { value: 'delivered_paid', label: 'Delivered & paid', variant: 'delivered' },
 ]
 
 type AsyncState = 'idle' | 'loading' | 'error'
@@ -112,69 +112,67 @@ export function PitchDetailModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl rounded-lg bg-white p-6 text-gray-900 shadow-xl"
+        className="w-full max-w-2xl rounded-md border border-ink bg-paper p-7 text-ink"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Edit pitch</h2>
+        <header className="mb-6 flex items-center justify-between">
+          <span className="kicker">Edit pitch</span>
           <button
             type="button"
             onClick={onClose}
-            className="text-sm text-gray-500 hover:text-gray-900"
+            className="topbar-signout"
+            aria-label="Close"
           >
-            Close
+            Close ✕
           </button>
         </header>
 
-        <form onSubmit={onSave} className="space-y-3 text-sm">
+        <form onSubmit={onSave} className="space-y-5 text-sm">
           <Field label="Pipeline stage">
-            <select
-              value={draft.pipeline_stage}
-              onChange={(e) =>
-                update('pipeline_stage', e.target.value as PipelineStage)
-              }
-              className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-gray-900"
-            >
-              {STAGES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {STAGES.map((s) => {
+                const active = draft.pipeline_stage === s.value
+                return (
+                  <button
+                    key={s.value}
+                    type="button"
+                    onClick={() => update('pipeline_stage', s.value)}
+                    className={`stage ${s.variant} cursor-pointer transition-opacity ${active ? '' : 'opacity-40 hover:opacity-70'}`}
+                    aria-pressed={active}
+                  >
+                    {s.label}
+                  </button>
+                )
+              })}
+            </div>
           </Field>
           <Field label="Brand">
-            <input
-              type="text"
+            <TextInput
               value={draft.brand_name ?? ''}
-              onChange={(e) => update('brand_name', e.target.value || null)}
-              className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-gray-900"
+              onChange={(v) => update('brand_name', v || null)}
             />
           </Field>
           <Field label="Sender">
-            <input
-              type="text"
+            <TextInput
               value={draft.sender_name ?? ''}
-              onChange={(e) => update('sender_name', e.target.value || null)}
-              className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-gray-900"
+              onChange={(v) => update('sender_name', v || null)}
             />
           </Field>
           <Field label="Deliverables (comma-separated)">
-            <input
-              type="text"
+            <TextInput
               value={draft.deliverables.join(', ')}
-              onChange={(e) =>
+              onChange={(v) =>
                 update(
                   'deliverables',
-                  e.target.value
+                  v
                     .split(',')
                     .map((s) => s.trim())
                     .filter(Boolean)
                 )
               }
-              className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-gray-900"
             />
           </Field>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field label="Budget amount">
               <input
                 type="number"
@@ -186,36 +184,26 @@ export function PitchDetailModal({
                     e.target.value === '' ? null : Number(e.target.value)
                   )
                 }
-                className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-gray-900"
+                className="signin-input w-full"
               />
             </Field>
             <Field label="Currency">
-              <input
-                type="text"
+              <TextInput
                 value={draft.budget_currency ?? ''}
-                onChange={(e) =>
-                  update('budget_currency', e.target.value || null)
-                }
-                className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-gray-900"
+                onChange={(v) => update('budget_currency', v || null)}
               />
             </Field>
             <Field label="Budget notes">
-              <input
-                type="text"
+              <TextInput
                 value={draft.budget_notes ?? ''}
-                onChange={(e) =>
-                  update('budget_notes', e.target.value || null)
-                }
-                className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-gray-900"
+                onChange={(v) => update('budget_notes', v || null)}
               />
             </Field>
           </div>
           <Field label="Deadline">
-            <input
-              type="text"
+            <TextInput
               value={draft.deadline ?? ''}
-              onChange={(e) => update('deadline', e.target.value || null)}
-              className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-gray-900"
+              onChange={(v) => update('deadline', v || null)}
             />
           </Field>
           <Field label="Category">
@@ -224,7 +212,7 @@ export function PitchDetailModal({
               onChange={(e) =>
                 update('category', e.target.value as PitchCategory)
               }
-              className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-gray-900"
+              className="signin-input w-full"
             >
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>
@@ -238,7 +226,7 @@ export function PitchDetailModal({
               rows={2}
               value={draft.ai_summary ?? ''}
               onChange={(e) => update('ai_summary', e.target.value || null)}
-              className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-gray-900"
+              className="signin-input w-full"
             />
           </Field>
           <Field label="Your notes">
@@ -246,26 +234,26 @@ export function PitchDetailModal({
               rows={3}
               value={draft.user_notes ?? ''}
               onChange={(e) => update('user_notes', e.target.value || null)}
-              className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-gray-900"
+              className="signin-input w-full"
               placeholder="Personal notes, follow-up reminders, negotiation context…"
             />
           </Field>
 
-          <div className="flex items-center justify-between pt-2">
+          <div className="flex items-center justify-between pt-3">
             <button
               type="button"
               onClick={onDelete}
               disabled={state === 'loading'}
-              className="text-sm font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
+              className="font-mono text-xs uppercase tracking-wider text-accent hover:opacity-70 disabled:opacity-50"
             >
               Delete pitch
             </button>
             <div className="flex items-center gap-3">
-              {error && <p className="text-sm text-red-600">{error}</p>}
+              {error && <p className="font-mono text-xs text-accent">{error}</p>}
               <button
                 type="submit"
                 disabled={state === 'loading'}
-                className="inline-flex items-center gap-2 rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                className="btn-pill disabled:opacity-50"
               >
                 {state === 'loading' && <Spinner className="h-4 w-4" />}
                 {state === 'loading' ? 'Saving…' : 'Save changes'}
@@ -281,10 +269,25 @@ export function PitchDetailModal({
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium text-gray-900">
-        {label}
-      </span>
+      <span className="signin-label mb-2">{label}</span>
       {children}
     </label>
+  )
+}
+
+function TextInput({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="signin-input w-full"
+    />
   )
 }

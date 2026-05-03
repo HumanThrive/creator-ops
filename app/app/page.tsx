@@ -1,7 +1,9 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Kanban } from '@/components/Kanban'
-import { AddPitchTrigger } from '@/components/AddPitchTrigger'
+import { TopBar } from '@/components/TopBar'
+import { StatsStrip } from '@/components/StatsStrip'
+import { computePitchStats } from '@/lib/pitch-stats'
 import type { Pitch } from '@/lib/types/pitch'
 
 export default async function AppPage() {
@@ -16,29 +18,33 @@ export default async function AppPage() {
     .select('*')
     .order('created_at', { ascending: false })
 
+  const safePitches = (pitches ?? []) as Pitch[]
+  const stats = computePitchStats(safePitches)
+
   return (
-    <main className="min-h-screen p-6">
-      <header className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold">SupaSpike</h1>
-          <AddPitchTrigger />
+    <div className="app">
+      <TopBar active="pitches" />
+      <div className="page">
+        <div className="page-head">
+          <div className="page-head-l">
+            <span className="kicker">
+              Your board · {stats.pitchCount} pitches · {stats.brandCount} brands
+            </span>
+            <h1 className="page-h1">Pitches.</h1>
+          </div>
         </div>
-        <form action="/auth/signout" method="post">
-          <button
-            type="submit"
-            className="text-sm text-gray-600 hover:text-gray-900"
-          >
-            Sign out
-          </button>
-        </form>
-      </header>
-      {error ? (
-        <p className="text-sm text-red-600">
-          Failed to load pitches: {error.message}
-        </p>
-      ) : (
-        <Kanban pitches={(pitches ?? []) as Pitch[]} />
-      )}
-    </main>
+
+        {error ? (
+          <p className="text-sm text-red-600">
+            Failed to load pitches: {error.message}
+          </p>
+        ) : (
+          <>
+            <StatsStrip stats={stats} />
+            <Kanban pitches={safePitches} />
+          </>
+        )}
+      </div>
+    </div>
   )
 }

@@ -12,6 +12,29 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* SupaSpike design tokens — exposed to Tailwind v4 so utilities like
+   `bg-paper`, `text-ink-3`, `border-line-2`, `font-display` work alongside
+   the component classes defined in design-system.css.
+   Color values are duplicated from :root in design-system.css for token
+   resolution; keep both in sync if a value changes. */
+@theme {
+  --color-paper: #FFFFFF;
+  --color-paper-2: #F5F4F1;
+  --color-paper-3: #ECEAE5;
+  --color-ink: #0A0A0A;
+  --color-ink-2: #1F1F1F;
+  --color-ink-3: #4A4A4A;
+  --color-ink-4: #8E8E8E;
+  --color-accent: #E83A1F;
+  --color-line: rgba(10, 10, 10, 0.10);
+  --color-line-2: rgba(10, 10, 10, 0.18);
+
+  --font-display: var(--font-anton), 'Bebas Neue', 'Archivo Narrow', 'Helvetica Neue', sans-serif;
+  --font-wordmark: var(--font-archivo-black), 'Helvetica Neue', sans-serif;
+  --font-body: var(--font-archivo), 'Helvetica Neue', system-ui, sans-serif;
+  --font-supaspike-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;

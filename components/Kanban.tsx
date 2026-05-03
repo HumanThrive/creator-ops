@@ -9,55 +9,66 @@ const COLUMNS: { stage: PipelineStage; label: string }[] = [
   { stage: 'inbox', label: 'Inbox' },
   { stage: 'negotiating', label: 'Negotiating' },
   { stage: 'confirmed', label: 'Confirmed' },
-  { stage: 'delivered_paid', label: 'Delivered & Paid' },
+  { stage: 'delivered_paid', label: 'Delivered & paid' },
 ]
+
+// CEO Q8: per column, the highest-budget pitch gets the spotlight ring.
+// Tie-break: most recent created_at. Skip if no pitches in column have a budget.
+function spotlightId(items: Pitch[]): string | null {
+  let best: Pitch | null = null
+  for (const p of items) {
+    if (!p.budget_amount || p.budget_amount <= 0) continue
+    if (!best || p.budget_amount > best.budget_amount!) {
+      best = p
+      continue
+    }
+    if (p.budget_amount === best.budget_amount && p.created_at > best.created_at) {
+      best = p
+    }
+  }
+  return best?.id ?? null
+}
 
 export function Kanban({ pitches }: { pitches: Pitch[] }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const selected = pitches.find((p) => p.id === selectedId) ?? null
 
-  const grouped = COLUMNS.map(({ stage, label }) => ({
-    stage,
-    label,
-    items: pitches.filter((p) => p.pipeline_stage === stage),
-  }))
-
   return (
     <>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        {grouped.map(({ stage, label, items }) => (
-          <section key={stage} className="rounded-lg bg-gray-50 p-3">
-            <header className="mb-3 flex items-center justify-between text-sm font-medium text-gray-700">
-              <span>{label}</span>
-              <span className="text-gray-500">{items.length}</span>
-            </header>
-            <div className="space-y-2">
-              {items.length === 0 ? (
-                stage === 'inbox' ? (
-                  <p className="text-xs text-gray-500">
+      <section className="board">
+        {COLUMNS.map(({ stage, label }) => {
+          const items = pitches.filter((p) => p.pipeline_stage === stage)
+          const spotId = spotlightId(items)
+          const countStr = String(items.length).padStart(2, '0')
+          return (
+            <div key={stage} className="col">
+              <div className="col-head">
+                <div className="col-head-l">
+                  <strong>{label}</strong>
+                </div>
+                <span className="col-n">{countStr}</span>
+              </div>
+              <div className="col-cards">
+                {items.length === 0 && stage === 'inbox' && (
+                  <p className="font-mono text-xs text-ink-4">
                     No pitches yet. Paste your first one →
                   </p>
-                ) : (
-                  <p className="text-xs text-gray-400">—</p>
-                )
-              ) : (
-                items.map((pitch) => (
+                )}
+                {items.map((pitch) => (
                   <PitchCard
                     key={pitch.id}
                     pitch={pitch}
+                    spotlight={pitch.id === spotId}
                     onClick={() => setSelectedId(pitch.id)}
                   />
-                ))
-              )}
+                ))}
+              </div>
             </div>
-          </section>
-        ))}
-      </div>
+          )
+        })}
+      </section>
       {selected && (
-        <PitchDetailModal
-          pitch={selected}
-          onClose={() => setSelectedId(null)}
-        />
+        <PitchDetailModal pitch={selected} onClose={() => setSelectedId(null)} />
       )}
     </>
   )

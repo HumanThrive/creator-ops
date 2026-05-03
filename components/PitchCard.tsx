@@ -1,44 +1,50 @@
 'use client'
 
 import type { Pitch } from '@/lib/types/pitch'
-import { CategoryBadge } from './CategoryBadge'
+import { formatCurrencyAmount } from '@/lib/pitch-stats'
 
-export function PitchCard({
-  pitch,
-  onClick,
-}: {
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+
+function shortDate(iso: string): string {
+  const d = new Date(iso)
+  return `${MONTHS[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')}`
+}
+
+interface PitchCardProps {
   pitch: Pitch
   onClick: () => void
-}) {
-  const budgetText =
-    pitch.budget_amount !== null
-      ? `$${pitch.budget_amount.toLocaleString()} ${pitch.budget_currency ?? ''}`.trim()
-      : 'No cash budget'
+  spotlight?: boolean
+}
+
+export function PitchCard({ pitch, onClick, spotlight = false }: PitchCardProps) {
+  const hasAmount =
+    pitch.budget_amount !== null && pitch.budget_amount > 0 && pitch.budget_currency !== null
+  const amount = hasAmount
+    ? `${formatCurrencyAmount(pitch.budget_currency!.trim().toUpperCase(), pitch.budget_amount!)} ${pitch.budget_currency!.trim().toUpperCase()}`
+    : '—'
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className="block w-full rounded-md border border-gray-200 bg-white p-3 text-left text-sm shadow-sm transition hover:border-gray-300 hover:shadow"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+      className={'card' + (spotlight ? ' is-spotlight' : '')}
+      aria-label={`Open pitch from ${pitch.brand_name ?? 'unknown brand'}`}
     >
-      <div className="mb-1 font-medium text-gray-900">
-        {pitch.brand_name ?? 'Unknown brand'}
+      <div className="card-r1">
+        <span className="card-brand">{pitch.brand_name ?? 'Unknown brand'}</span>
+        <span className={'card-amt' + (hasAmount ? '' : ' muted')}>{amount}</span>
       </div>
-      <div className="text-gray-700">{budgetText}</div>
-      {pitch.budget_notes && (
-        <div className="text-xs text-gray-500">{pitch.budget_notes}</div>
-      )}
-      {pitch.deadline && (
-        <div className="mt-1 text-xs text-gray-600">Due: {pitch.deadline}</div>
-      )}
-      <div className="mt-2">
-        <CategoryBadge category={pitch.category} />
+      <div className="card-summary">{pitch.ai_summary ?? '—'}</div>
+      <div className="card-foot">
+        <span>{shortDate(pitch.created_at)}</span>
       </div>
-      {pitch.ai_summary && (
-        <p className="mt-2 line-clamp-2 text-xs text-gray-600">
-          {pitch.ai_summary}
-        </p>
-      )}
-    </button>
+    </div>
   )
 }
