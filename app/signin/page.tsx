@@ -34,7 +34,7 @@ export default function SignInPage() {
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-sm space-y-6">
-        <h1 className="text-2xl font-semibold">Sign in to Creator Ops</h1>
+        <h1 className="text-2xl font-semibold">Sign in to SupaSpike</h1>
         {status === 'sent' ? (
           <p className="text-sm text-gray-700">
             Check your inbox at <strong>{email}</strong> for the magic link.

@@ -20,7 +20,7 @@ export default async function AppPage() {
     <main className="min-h-screen p-6">
       <header className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold">Creator Ops</h1>
+          <h1 className="text-xl font-semibold">SupaSpike</h1>
           <AddPitchTrigger />
         </div>
         <form action="/auth/signout" method="post">

@@ -4,6 +4,22 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { ExtractedPitch, PitchCategory } from '@/lib/types/pitch'
+import { Spinner } from './Spinner'
+
+function friendlyExtractError(code: string | undefined): string {
+  switch (code) {
+    case 'unauthorized':
+      return 'Your session expired. Please sign in again.'
+    case 'extraction_invalid_response':
+    case 'extraction_parse_failed':
+      return "Couldn't read the AI response. Try a different paste or rephrase."
+    default:
+      if (code?.startsWith('anthropic_')) {
+        return 'AI service is having trouble. Please try again in a moment.'
+      }
+      return code ?? 'Extraction failed. Please try again.'
+  }
+}
 
 const CATEGORIES: PitchCategory[] = [
   'legit',
@@ -48,13 +64,17 @@ export function AddPitchModal({ onClose }: { onClose: () => void }) {
       })
       const json = await res.json()
       if (!res.ok || !json.success) {
-        throw new Error(json.error ?? 'extraction failed')
+        throw new Error(friendlyExtractError(json.error))
       }
       setExtracted(json.data as ExtractedPitch)
       setStep('preview')
       setState('idle')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'unknown error')
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Network error. Check your connection and try again.'
+      )
       setState('error')
     }
   }
@@ -122,7 +142,7 @@ export function AddPitchModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-6"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-2 sm:p-6"
       onClick={onClose}
     >
       <div
@@ -157,8 +177,9 @@ export function AddPitchModal({ onClose }: { onClose: () => void }) {
               <button
                 type="submit"
                 disabled={state === 'loading' || !pitchText.trim()}
-                className="rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
               >
+                {state === 'loading' && <Spinner className="h-4 w-4" />}
                 {state === 'loading' ? 'Extracting…' : 'Extract'}
               </button>
               {error && <p className="text-sm text-red-600">{error}</p>}
@@ -204,7 +225,7 @@ export function AddPitchModal({ onClose }: { onClose: () => void }) {
                 className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-gray-900"
               />
             </Field>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <Field label="Budget amount">
                 <input
                   type="number"
@@ -278,8 +299,9 @@ export function AddPitchModal({ onClose }: { onClose: () => void }) {
               <button
                 type="submit"
                 disabled={state === 'loading'}
-                className="rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
               >
+                {state === 'loading' && <Spinner className="h-4 w-4" />}
                 {state === 'loading' ? 'Saving…' : 'Save to Inbox'}
               </button>
               <button

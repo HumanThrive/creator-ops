@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Pitch, PipelineStage, PitchCategory } from '@/lib/types/pitch'
+import { Spinner } from './Spinner'
 
 const CATEGORIES: PitchCategory[] = [
   'legit',
@@ -107,7 +108,7 @@ export function PitchDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-6"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-2 sm:p-6"
       onClick={onClose}
     >
       <div
@@ -173,7 +174,7 @@ export function PitchDetailModal({
               className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-gray-900"
             />
           </Field>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <Field label="Budget amount">
               <input
                 type="number"
@@ -264,8 +265,9 @@ export function PitchDetailModal({
               <button
                 type="submit"
                 disabled={state === 'loading'}
-                className="rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
               >
+                {state === 'loading' && <Spinner className="h-4 w-4" />}
                 {state === 'loading' ? 'Saving…' : 'Save changes'}
               </button>
             </div>
