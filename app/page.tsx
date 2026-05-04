@@ -11,57 +11,126 @@ export const metadata: Metadata = {
 export default function LandingPage() {
   return (
     <div className="flex min-h-screen flex-col bg-paper text-ink">
-      {/* Top bar */}
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
+      {/* Top bar — full-width per design */}
+      <header
+        className="flex w-full items-center justify-between border-b border-line"
+        style={{ padding: '18px clamp(20px, 4vw, 56px)' }}
+      >
         <span className="wordmark text-lg">
           SupaSpike<sup>+</sup>
         </span>
-        <Link href="/signin" className="btn-ghost">
-          Sign in
-        </Link>
+        {/* Center menu placeholder — items added when corresponding pages exist */}
+        <nav aria-label="Primary" className="hidden flex-1 justify-center gap-9 sm:flex" />
+        <div className="flex items-center gap-5">
+          <Link
+            href="/signin"
+            className="font-body text-[13.5px] font-medium text-ink-3 transition-colors hover:text-ink"
+          >
+            Sign in
+          </Link>
+          <Link href="#get-access" className="btn-nav">
+            Get access
+          </Link>
+        </div>
       </header>
 
-      {/* Hero */}
-      <section className="px-6 pb-16 pt-12 sm:pt-20">
-        <div className="mx-auto w-full max-w-5xl">
-          <span className="kicker">Phase A · Brand-deal CRM</span>
-          <h1
-            className="font-display mt-6 uppercase text-ink"
-            style={{
-              fontSize: 'clamp(56px, 11vw, 160px)',
-              lineHeight: 0.88,
-              letterSpacing: '0.005em',
-              margin: '24px 0 0',
-            }}
-          >
-            Spike your
-            <br />
-            <em className="not-italic text-accent">brand deals.</em>
-          </h1>
-          <p className="font-body mt-10 max-w-2xl text-lg leading-relaxed text-ink-2">
-            SupaSpike pulls every brand pitch — email, Instagram, TikTok,
-            anywhere — into your own brand-deal CRM. Track from pitch to paid.
-            Built for creators running themselves.
+      {/* Hero — full design fidelity */}
+      <section className="hero">
+        <div className="hero-top">
+          <p className="hero-lead">
+            We build the brand-deal CRM for solo creators — every pitch from
+            email, IG and TikTok turns into{' '}
+            <strong>structured rows you keep forever.</strong> Your inbox stops
+            being the database.
           </p>
-          <div className="mt-10 max-w-xl">
-            <span className="signin-label mb-3 block">Drop your email</span>
-            <WaitlistForm />
-            <p className="mt-4 font-mono text-xs uppercase tracking-wider text-ink-4">
-              Follow{' '}
-              <a
-                href="https://x.com/supaspikehq"
-                className="text-ink hover:text-accent"
-              >
-                @supaspikehq
-              </a>{' '}
-              on X for daily build updates →
-            </p>
+          <div className="hero-tags">
+            <span>Pitch capture</span>
+            <span>Pipeline tracking</span>
+            <span>Brand history</span>
+            <span>Quote recall</span>
           </div>
+        </div>
+        <div className="hero-massive">
+          <h1 className="hero-h1">
+            Spike Your
+            <br />
+            Brand Deals
+          </h1>
+          <div className="hero-photo">
+            <svg viewBox="0 0 160 200" preserveAspectRatio="xMidYMid slice">
+              <defs>
+                <linearGradient id="hg" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#1F1F1F" />
+                  <stop offset="60%" stopColor="#0A0A0A" />
+                  <stop offset="100%" stopColor="#1A1A1A" />
+                </linearGradient>
+              </defs>
+              <rect width="160" height="200" fill="url(#hg)" />
+              <polygon
+                points="80,30 92,96 154,100 92,104 80,170 68,104 6,100 68,96"
+                fill="#FFFFFF"
+                opacity="0.95"
+              />
+              <polygon
+                points="80,30 88,96 154,100 88,104 80,170 80,104 6,100 80,96"
+                fill="#E83A1F"
+                opacity="0.6"
+              />
+              <text
+                x="80"
+                y="190"
+                textAnchor="middle"
+                fontFamily="JetBrains Mono"
+                fontSize="7"
+                fill="#FFFFFF"
+                opacity="0.6"
+                letterSpacing="2"
+              >
+                / ASSET
+              </text>
+            </svg>
+          </div>
+        </div>
+        <div className="hero-foot">
+          <div className="hero-foot-left">
+            <Link href="#get-access" className="btn-lg">
+              Get early access
+            </Link>
+            <Link href="#demo" className="btn-text">
+              See the dashboard <span className="arrow">→</span>
+            </Link>
+          </div>
+          <div className="hero-foot-right">PHASE A · PRIVATE BETA · MAY 2026</div>
         </div>
       </section>
 
+      {/* About — dark band statement */}
+      <section className="dark-band">
+        <div className="dark-band-inner">
+          <div className="dark-kicker">ABOUT</div>
+          <h2 className="dark-band-h2">
+            We turn the chaos of brand outreach into{' '}
+            <em>one calm, structured asset</em> — a database of every pitch,
+            every brand, every quote. Built for the creator running themselves.
+          </h2>
+        </div>
+      </section>
+
+      {/* Logos strip — Founder will swap to SupaSpike feature list before launch */}
+      {/* <section className="logos">
+        <div className="logos-track">
+          <div className="logo"><span className="logo-mark sp" /> Glossier</div>
+          <div className="logo"><span className="logo-mark" /> Olipop</div>
+          <div className="logo"><span className="logo-mark sq" /> Gymshark</div>
+          <div className="logo"><span className="logo-mark tri" /> Audible</div>
+          <div className="logo"><span className="logo-mark" /> Adobe</div>
+          <div className="logo"><span className="logo-mark sp" /> Notion</div>
+          <div className="logo"><span className="logo-mark sq" /> Figma</div>
+        </div>
+      </section> */}
+
       {/* How it works (value props) */}
-      <section className="px-6 py-16 sm:py-24">
+      <section id="how" className="px-6 py-16 sm:py-24">
         <div className="mx-auto max-w-5xl">
           <span className="kicker mb-8 block">
             Three moves · zero spreadsheets
@@ -84,7 +153,7 @@ export default function LandingPage() {
       </section>
 
       {/* Demo */}
-      <section className="px-6 py-16 sm:py-24">
+      <section id="demo" className="px-6 py-16 sm:py-24">
         <div className="mx-auto max-w-5xl">
           <span className="kicker block">Day one</span>
           <h2
@@ -114,7 +183,7 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing */}
-      <section className="px-6 py-16 sm:py-24">
+      <section id="pricing" className="px-6 py-16 sm:py-24">
         <div className="mx-auto max-w-3xl">
           <span className="kicker block">Pricing</span>
           <h2
@@ -139,7 +208,7 @@ export default function LandingPage() {
       </section>
 
       {/* Email capture (closing) */}
-      <section className="bg-ink px-6 py-20">
+      <section id="get-access" className="bg-ink px-6 py-20">
         <div className="mx-auto max-w-3xl">
           <span className="kicker" style={{ color: 'rgba(255,255,255,0.6)' }}>
             Get in
