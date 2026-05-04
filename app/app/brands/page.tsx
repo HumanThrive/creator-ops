@@ -1,6 +1,4 @@
-import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { TopBar } from '@/components/TopBar'
 import { BrandsList } from '@/components/BrandsList'
 import { AddPitchTrigger } from '@/components/AddPitchTrigger'
 import { computeBrandSummaries, computePitchStats } from '@/lib/pitch-stats'
@@ -8,10 +6,6 @@ import type { Pitch } from '@/lib/types/pitch'
 
 export default async function BrandsPage() {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/signin')
 
   const { data: pitches, error } = await supabase
     .from('pitches')
@@ -25,36 +19,33 @@ export default async function BrandsPage() {
   const isEmpty = brands.known.length === 0 && brands.unknown === null
 
   return (
-    <div className="app">
-      <TopBar active="brands" />
-      <div className="page">
-        <div className="page-head">
-          <div className="page-head-l">
-            <span className="kicker">
-              Your asset · {stats.brandCount} brands · {stats.pitchCount} pitches
-            </span>
-            <h1 className="page-h1">Brands.</h1>
-            <p className="page-sub">
-              Every brand you&rsquo;ve worked with &mdash; your relationship history at a
-              glance. Each row is a relationship; click in to see every pitch.
-            </p>
-          </div>
-        </div>
-
-        {error ? (
-          <p className="text-sm text-red-600">
-            Couldn&rsquo;t load brands. Refresh to try again.
+    <div className="page">
+      <div className="page-head">
+        <div className="page-head-l">
+          <span className="kicker">
+            Your asset · {stats.brandCount} brands · {stats.pitchCount} pitches
+          </span>
+          <h1 className="page-h1">Brands.</h1>
+          <p className="page-sub">
+            Every brand you&rsquo;ve worked with &mdash; your relationship history at a
+            glance. Each row is a relationship; click in to see every pitch.
           </p>
-        ) : isEmpty ? (
-          <BrandsEmptyState />
-        ) : (
-          <BrandsList
-            known={brands.known}
-            unknown={brands.unknown}
-            currencyTotals={stats.currencyTotals}
-          />
-        )}
+        </div>
       </div>
+
+      {error ? (
+        <p className="text-sm text-red-600">
+          Couldn&rsquo;t load brands. Refresh to try again.
+        </p>
+      ) : isEmpty ? (
+        <BrandsEmptyState />
+      ) : (
+        <BrandsList
+          known={brands.known}
+          unknown={brands.unknown}
+          currencyTotals={stats.currencyTotals}
+        />
+      )}
     </div>
   )
 }

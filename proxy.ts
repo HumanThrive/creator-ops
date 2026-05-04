@@ -25,10 +25,14 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  // getUser refreshes the session token. Do not move this — it must run before any redirect.
+  // getSession reads cookies + auto-refreshes expired access tokens — no /user
+  // round-trip. Per-request revocation is enforced by <AuthVerifier> in the
+  // app layout, which calls /api/whoami after each navigation. RLS still gates
+  // all data access regardless of session state.
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: { session },
+  } = await supabase.auth.getSession()
+  const user = session?.user ?? null
 
   const path = request.nextUrl.pathname
 

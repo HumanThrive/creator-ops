@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { TopBar } from '@/components/TopBar'
 import { BrandHistoryTable } from '@/components/BrandHistoryTable'
 import { findBrandDetail, formatCurrencyAmount } from '@/lib/pitch-stats'
 import { formatFullDate, formatRelativeTime } from '@/lib/format'
@@ -13,10 +12,6 @@ interface BrandDetailPageProps {
 
 export default async function BrandDetailPage({ params }: BrandDetailPageProps) {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/signin')
 
   const { brand: brandSlug } = await params
 
@@ -35,59 +30,56 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
     : `${repeatLabel} · since ${formatFullDate(detail.firstContactAt)}`
 
   return (
-    <div className="app">
-      <TopBar active="brands" />
-      <div className="page">
-        <Link href="/app/brands" className="page-back">
-          ← All brands
-        </Link>
-        <div className="page-head">
-          <div className="page-head-l">
-            <span className="kicker">{kicker}</span>
-            <h1 className="page-h1">{detail.displayName}.</h1>
-            <p className="page-sub">
-              {detail.pitchCount} {detail.pitchCount === 1 ? 'pitch' : 'pitches'} · Last
-              contact {formatRelativeTime(detail.lastContactAt)} · Tracked since{' '}
-              {formatFullDate(detail.firstContactAt)}.
-            </p>
-          </div>
+    <div className="page">
+      <Link href="/app/brands" className="page-back">
+        ← All brands
+      </Link>
+      <div className="page-head">
+        <div className="page-head-l">
+          <span className="kicker">{kicker}</span>
+          <h1 className="page-h1">{detail.displayName}.</h1>
+          <p className="page-sub">
+            {detail.pitchCount} {detail.pitchCount === 1 ? 'pitch' : 'pitches'} · Last
+            contact {formatRelativeTime(detail.lastContactAt)} · Tracked since{' '}
+            {formatFullDate(detail.firstContactAt)}.
+          </p>
         </div>
-
-        <div className="bd-headstrip">
-          <div className="bd-meta">
-            <div className="bd-meta-cell">
-              <span className="bd-meta-l">Pitches</span>
-              <span className="bd-meta-v">
-                {String(detail.pitchCount).padStart(2, '0')}
-              </span>
-            </div>
-            <div className="bd-meta-cell">
-              <span className="bd-meta-l">Tracked total</span>
-              <TrackedTotal totals={detail.currencyTotals} />
-            </div>
-            <div className="bd-meta-cell">
-              <span className="bd-meta-l">Avg deal</span>
-              <AvgDealValue avgDeal={detail.avgDeal} />
-            </div>
-          </div>
-          <div className="bd-meta cols-2">
-            <div className="bd-meta-cell">
-              <span className="bd-meta-l">First contact</span>
-              <span className="bd-meta-v" style={{ fontSize: 22 }}>
-                {formatFullDate(detail.firstContactAt)}
-              </span>
-            </div>
-            <div className="bd-meta-cell">
-              <span className="bd-meta-l">Last contact</span>
-              <span className="bd-meta-v" style={{ fontSize: 22 }}>
-                {formatFullDate(detail.lastContactAt)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <BrandHistoryTable pitches={detail.pitches} />
       </div>
+
+      <div className="bd-headstrip">
+        <div className="bd-meta">
+          <div className="bd-meta-cell">
+            <span className="bd-meta-l">Pitches</span>
+            <span className="bd-meta-v">
+              {String(detail.pitchCount).padStart(2, '0')}
+            </span>
+          </div>
+          <div className="bd-meta-cell">
+            <span className="bd-meta-l">Tracked total</span>
+            <TrackedTotal totals={detail.currencyTotals} />
+          </div>
+          <div className="bd-meta-cell">
+            <span className="bd-meta-l">Avg deal</span>
+            <AvgDealValue avgDeal={detail.avgDeal} />
+          </div>
+        </div>
+        <div className="bd-meta cols-2">
+          <div className="bd-meta-cell">
+            <span className="bd-meta-l">First contact</span>
+            <span className="bd-meta-v" style={{ fontSize: 22 }}>
+              {formatFullDate(detail.firstContactAt)}
+            </span>
+          </div>
+          <div className="bd-meta-cell">
+            <span className="bd-meta-l">Last contact</span>
+            <span className="bd-meta-v" style={{ fontSize: 22 }}>
+              {formatFullDate(detail.lastContactAt)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <BrandHistoryTable pitches={detail.pitches} />
     </div>
   )
 }

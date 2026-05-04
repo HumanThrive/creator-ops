@@ -1,17 +1,19 @@
+'use client'
+
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { AddPitchTrigger } from '@/components/AddPitchTrigger'
 
-type ActiveTab = 'pitches' | 'brands'
+export function TopBar() {
+  const pathname = usePathname()
+  const active: 'pitches' | 'brands' = pathname.startsWith('/app/brands')
+    ? 'brands'
+    : 'pitches'
 
-interface TopBarProps {
-  active: ActiveTab
-}
-
-export function TopBar({ active }: TopBarProps) {
   return (
     <header className="topbar">
       <Link href="/app" className="topbar-brand">
-        SupaSpike<sup>+</sup>
+        SupaSpike<sup>®</sup>
       </Link>
       <nav className="topbar-nav">
         <Link href="/app" className={active === 'pitches' ? 'active' : ''}>

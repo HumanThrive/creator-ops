@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, type FormEvent } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
 type Status = 'idle' | 'loading' | 'sent' | 'error'
@@ -66,12 +67,12 @@ export default function SignInPage() {
   return (
     <main className="signin-page">
       <div className="signin-left">
-        <span className="signin-brand">
+        <Link href="/" className="signin-brand" aria-label="Back to landing">
           SupaSpike<sup>+</sup>
-        </span>
+        </Link>
 
         <div className="signin-pad">
-          <span className="kicker">Sign in · Phase A</span>
+          <span className="kicker">Sign in</span>
           <h1 className="signin-h1">
             Open<br />
             your<br />
@@ -123,8 +124,8 @@ export default function SignInPage() {
         </div>
 
         <div className="signin-foot">
+          <span></span>
           <span>SUPASPIKE.COM</span>
-          <span>v0.1 · PHASE A</span>
         </div>
       </div>
 
