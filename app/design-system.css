@@ -1154,8 +1154,6 @@
 }
 
 /* ─────────── Landing logos strip ─────────── */
-/* Stopgap: real wordmarks per design HTML; Founder will swap to a SupaSpike
-   feature list before public launch. */
 
 .logos {
   background: var(--ink);
@@ -1206,9 +1204,6 @@
 }
 
 /* ─────────── Landing How (work process) ─────────── */
-/* Visuals 1-3 demo data uses Glossier/Audible as placeholders;
-   Founder will swap to fictional ICP-plausible brand names alongside
-   the logos strip swap before public launch. */
 
 .how {
   background: var(--paper);
@@ -1438,9 +1433,6 @@
 .service-h2 em { font-style: normal; color: var(--accent); }
 
 /* ─────────── Landing Demo (dashboard preview) ─────────── */
-/* Demo board uses real brand placeholders (Glossier/Olipop/Gymshark/Audible/
-   Glow Skincare/Adobe) per design HTML; will swap to fictional set alongside
-   logos + how-card-visual swap before public launch. */
 
 .demo {
   background: var(--paper);

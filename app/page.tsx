@@ -166,7 +166,7 @@ export default function LandingPage() {
               </p>
               <div className="how-card-visual">
                 <div className="v1-paste">
-                  <div className="v1-paste-h">— from: brand@glossier.com</div>
+                  <div className="v1-paste-h">— from: partners@maegjuu.co</div>
                   Hi! We&apos;d love to send <mark>3 products</mark> for{' '}
                   <mark>2 IG Reels</mark> by <mark>May 18</mark>. Budget around{' '}
                   <mark>$3,500</mark>. Let me know!
@@ -175,7 +175,7 @@ export default function LandingPage() {
                 <div className="v1-fields">
                   <div className="v1-field">
                     <div className="v1-field-k">Brand</div>
-                    <div className="v1-field-v">Glossier</div>
+                    <div className="v1-field-v">Maegjuu</div>
                   </div>
                   <div className="v1-field">
                     <div className="v1-field-k">Budget</div>
@@ -249,22 +249,22 @@ export default function LandingPage() {
                 style={{ gap: '6px', justifyContent: 'center' }}
               >
                 <div className="v3-row">
-                  <span><strong>Glossier</strong></span>
+                  <span><strong>Maegjuu</strong></span>
                   <span className="v3-row-mono">$3,500 · May 26</span>
                   <span className="v3-row-stage">NEG</span>
                 </div>
                 <div className="v3-row">
-                  <span><strong>Glossier</strong></span>
+                  <span><strong>Maegjuu</strong></span>
                   <span className="v3-row-mono">$2,800 · Mar 26</span>
                   <span className="v3-row-stage">PAID</span>
                 </div>
                 <div className="v3-row is-accent">
-                  <span><strong>Glossier</strong></span>
+                  <span><strong>Maegjuu</strong></span>
                   <span className="v3-row-mono">$1,200 · Nov 25</span>
                   <span className="v3-row-stage">PAID</span>
                 </div>
                 <div className="v3-row">
-                  <span><strong>Audible</strong></span>
+                  <span><strong>Meuop</strong></span>
                   <span className="v3-row-mono">$4,200 · Apr 26</span>
                   <span className="v3-row-stage">CONF</span>
                 </div>
@@ -280,7 +280,7 @@ export default function LandingPage() {
           <div className="kicker">SERVICE</div>
           <h2 className="service-h2">
             We make <em>the asset visible.</em> The pipeline you can see, the
-            brand history you can trust, the quote you charged Nike six months
+            brand history you can trust, the quote you charged Maegjuu six months
             ago — one place, structured forever.
           </h2>
         </div>
@@ -326,10 +326,10 @@ export default function LandingPage() {
                   </span>
                 </nav>
                 <div className="dapp-side-foot">
-                  <div className="dapp-avatar">M</div>
+                  <div className="dapp-avatar">R</div>
                   <div className="dapp-side-foot-info">
-                    <strong>Mira</strong>
-                    <span>Beauty creator</span>
+                    <strong>Rei</strong>
+                    <span>SupaSpike Maker</span>
                   </div>
                 </div>
               </aside>
@@ -368,7 +368,7 @@ export default function LandingPage() {
                     <div className="fcol-cards">
                       <div className="fcard">
                         <div className="fcard-r1">
-                          <strong>Glossier</strong>
+                          <strong>Bong the Cat</strong>
                           <span className="fcard-amt">$3,500</span>
                         </div>
                         <div className="fcard-del">3 products · 2 IG Reels</div>
@@ -379,7 +379,7 @@ export default function LandingPage() {
                       </div>
                       <div className="fcard">
                         <div className="fcard-r1">
-                          <strong>Olipop</strong>
+                          <strong>Double Bee</strong>
                           <span className="fcard-amt">$1,800</span>
                         </div>
                         <div className="fcard-del">1 TikTok · 1 IG Story</div>
@@ -398,7 +398,7 @@ export default function LandingPage() {
                     <div className="fcol-cards">
                       <div className="fcard is-spotlight">
                         <div className="fcard-r1">
-                          <strong>Gymshark</strong>
+                          <strong>HumanThrive</strong>
                           <span className="fcard-amt">$4,200</span>
                         </div>
                         <div className="fcard-del">2 Reels · usage rights</div>
@@ -409,7 +409,7 @@ export default function LandingPage() {
                       </div>
                       <div className="fcard">
                         <div className="fcard-r1">
-                          <strong>Audible</strong>
+                          <strong>GushEncore</strong>
                           <span className="fcard-amt">$4,200</span>
                         </div>
                         <div className="fcard-del">1 podcast read</div>
@@ -428,7 +428,7 @@ export default function LandingPage() {
                     <div className="fcol-cards">
                       <div className="fcard">
                         <div className="fcard-r1">
-                          <strong>Glow Skincare</strong>
+                          <strong>Arche</strong>
                           <span className="fcard-amt">$2,400</span>
                         </div>
                         <div className="fcard-del">3 IG Stories</div>
@@ -447,7 +447,7 @@ export default function LandingPage() {
                     <div className="fcol-cards">
                       <div className="fcard">
                         <div className="fcard-r1">
-                          <strong>Adobe</strong>
+                          <strong>Niko</strong>
                           <span className="fcard-amt">$5,500</span>
                         </div>
                         <div className="fcard-del">YT integration</div>
@@ -551,8 +551,8 @@ export default function LandingPage() {
           <div className="foot-meta">
             <span>© 2026 SupaSpike</span>
             <a href="mailto:founder@supaspike.com">founder@supaspike.com</a>
-            <a href="#">Privacy</a>
-            <a href="#">Terms</a>
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
           </div>
         </div>
       </footer>
