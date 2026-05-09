@@ -471,21 +471,21 @@ export default function LandingPage() {
           <div>
             <div className="kicker">PRICING</div>
             <h2 className="pricing-h2">
-              One price.
+              Beta&apos;s free.
               <br />
-              <em>Free in beta.</em>
+              <em>Lock in $20.</em>
             </h2>
             <p className="pricing-body">
-              No tiers, no seats, no add-ons. SupaSpike costs the same for
-              everyone — and nothing while we&apos;re still in private beta.
-              Founders who join now keep that price for life.
+              No seats. No add-ons. Free through May 31. When beta closes,
+              Founders who joined pay $20 a month — locked while subscribed.
+              New subscribers from June 1 pay $30.
             </p>
           </div>
           <div className="pricing-card">
             <div className="pricing-card-tag">FOUNDER</div>
             <div className="pricing-card-price">
-              <strong>$30</strong>
-              <span>/ month at launch</span>
+              <strong>$20</strong>
+              <span>/ month, Founder rate</span>
             </div>
             <div className="pricing-card-rows">
               <div className="pricing-card-row">
@@ -502,8 +502,8 @@ export default function LandingPage() {
               </div>
             </div>
             <p className="pricing-card-fine">
-              Free while in private beta. Founder pricing locks for life if you
-              join now.
+              Free through May 31. $20/month Founder rate — locked while you
+              stay subscribed. New subscribers from June 1 pay $30.
             </p>
           </div>
         </div>

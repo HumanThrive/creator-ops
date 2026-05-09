@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, type FormEvent } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
 
 type Status = 'idle' | 'loading' | 'sent' | 'error'
 
@@ -33,13 +32,24 @@ export default function SignInPage() {
   async function sendLink(targetEmail: string) {
     setStatus('loading')
     setError(null)
-    const supabase = createClient()
-    const { error: signInError } = await supabase.auth.signInWithOtp({
-      email: targetEmail,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
-    })
-    if (signInError) {
-      setError(signInError.message)
+    try {
+      const res = await fetch('/api/signin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: targetEmail }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        setError(
+          json.error === 'not_on_list'
+            ? "This email isn't on our early access list."
+            : (json.message ?? 'Something went wrong. Please try again.'),
+        )
+        setStatus('error')
+        return
+      }
+    } catch {
+      setError('Network error. Please try again.')
       setStatus('error')
       return
     }

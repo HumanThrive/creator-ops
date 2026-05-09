@@ -3,8 +3,13 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { AddPitchTrigger } from '@/components/AddPitchTrigger'
+import { UserMenu } from '@/components/UserMenu'
 
-export function TopBar() {
+interface TopBarProps {
+  initial: string
+}
+
+export function TopBar({ initial }: TopBarProps) {
   const pathname = usePathname()
   const active: 'pitches' | 'brands' = pathname.startsWith('/app/brands')
     ? 'brands'
@@ -26,12 +31,9 @@ export function TopBar() {
       <div className="topbar-spacer" />
       <span className="topbar-meta">PHASE A · BUILD MODE</span>
       <div className="topbar-actions">
-        <AddPitchTrigger className="btn-pill" label="Add pitch" />
-        <form action="/auth/signout" method="post">
-          <button type="submit" className="topbar-signout">
-            Sign out
-          </button>
-        </form>
+        <AddPitchTrigger className="btn-pill topbar-add-pill" label="Add pitch" />
+        <AddPitchTrigger className="topbar-add-icon" label="+" />
+        <UserMenu initial={initial} />
       </div>
     </header>
   )

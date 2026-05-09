@@ -5,6 +5,9 @@ import type { ExtractedPitch } from '@/lib/types/pitch'
 
 const anthropic = new Anthropic()
 
+const DAILY_LIMIT = 100
+const INPUT_MAX_CHARS = 5000
+
 export async function POST(request: Request) {
   const supabase = await createClient()
   const {
@@ -32,6 +35,28 @@ export async function POST(request: Request) {
     return Response.json(
       { success: false, error: 'pitch_text_required' },
       { status: 400 }
+    )
+  }
+
+  if (pitchText.length > INPUT_MAX_CHARS) {
+    return Response.json(
+      { success: false, error: 'pitch_too_long' },
+      { status: 400 }
+    )
+  }
+
+  // check_and_increment_extraction is security definer — bypasses RLS.
+  // Fail open on DB error so a rate-limit glitch never blocks a real user.
+  const { data: allowed, error: rateLimitError } = await supabase.rpc(
+    'check_and_increment_extraction',
+    { p_user_id: user.id, p_limit: DAILY_LIMIT },
+  )
+  if (rateLimitError) {
+    console.error('[api/extract] rate limit check failed:', rateLimitError.message)
+  } else if (allowed === false) {
+    return Response.json(
+      { success: false, error: 'rate_limit_exceeded' },
+      { status: 429 },
     )
   }
 

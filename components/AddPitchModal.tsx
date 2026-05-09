@@ -10,6 +10,10 @@ function friendlyExtractError(code: string | undefined): string {
   switch (code) {
     case 'unauthorized':
       return 'Your session expired. Please sign in again.'
+    case 'pitch_too_long':
+      return 'That pitch is too long. Trim it to under 5,000 characters and try again.'
+    case 'rate_limit_exceeded':
+      return "You've hit today's extraction limit. Try again tomorrow."
     case 'extraction_invalid_response':
     case 'extraction_parse_failed':
       return "Couldn't read the AI response. Try a different paste or rephrase."
