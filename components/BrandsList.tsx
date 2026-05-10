@@ -103,12 +103,15 @@ function BrandRow({ brand, rank }: { brand: BrandSummary; rank: string }) {
         </span>
         <span className="brand-name-sub">{sub}</span>
       </div>
-      <span className="brand-pitches">
+      <span
+        className={`brand-pitches${brand.pitchCount === 1 ? ' is-single' : ''}`}
+      >
         <b>{brand.pitchCount}</b> {brand.pitchCount === 1 ? 'pitch' : 'pitches'}
       </span>
       <span className="brand-last">{formatRelativeTime(brand.lastContactAt)}</span>
       <BrandTotal brand={brand} />
       <span className="brand-arrow">→</span>
+      <span className="brand-row-divider" aria-hidden="true" />
     </Link>
   )
 }
