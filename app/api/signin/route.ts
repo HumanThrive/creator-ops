@@ -1,18 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createSSRClient } from '@/lib/supabase/server'
 
 function adminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  )
-}
-
-function anonClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } },
   )
 }
@@ -42,7 +35,8 @@ export async function POST(request: NextRequest) {
   const origin =
     request.headers.get('origin') ?? new URL(request.url).origin
 
-  const { error: otpError } = await anonClient().auth.signInWithOtp({
+  const supabase = await createSSRClient()
+  const { error: otpError } = await supabase.auth.signInWithOtp({
     email,
     options: { emailRedirectTo: `${origin}/auth/callback` },
   })
