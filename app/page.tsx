@@ -280,7 +280,7 @@ export default function LandingPage() {
           <div className="kicker">SERVICE</div>
           <h2 className="service-h2">
             We make <em>the asset visible.</em> The pipeline you can see, the
-            brand history you can trust, the quote you charged Maegjuu six months
+            brand history you can trust, the quote you charged your client six months
             ago — one place, structured forever.
           </h2>
         </div>
@@ -520,9 +520,8 @@ export default function LandingPage() {
           </h2>
           <div className="capture-grid">
             <p className="capture-body">
-              Founders join in the order we receive them. We&apos;re onboarding
-              ten creators a week. Drop your email — we&apos;ll be in touch
-              within seven days.
+              Founders join in the order we receive them. Drop your email — we&apos;ll be in touch
+              within 24 hours.
             </p>
             <div>
               <WaitlistForm />

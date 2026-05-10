@@ -78,7 +78,7 @@ export default function SignInPage() {
     <main className="signin-page">
       <div className="signin-left">
         <Link href="/" className="signin-brand" aria-label="Back to landing">
-          SupaSpike<sup>+</sup>
+          SupaSpike<sup>®</sup>
         </Link>
 
         <div className="signin-pad">
