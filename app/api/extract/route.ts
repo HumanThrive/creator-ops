@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
-import { buildSystemPrompt } from '@/lib/prompts/extract-system'
+import { buildSystemPrompt, type ExtractDirection } from '@/lib/prompts/extract-system'
 import type { ExtractedPitch } from '@/lib/types/pitch'
 
 const anthropic = new Anthropic()
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     )
   }
 
-  let body: { pitch_text?: string }
+  let body: { pitch_text?: string; direction?: string }
   try {
     body = await request.json()
   } catch {
@@ -45,6 +45,11 @@ export async function POST(request: Request) {
     )
   }
 
+  // Default to 'inbound' if direction is absent or invalid — backwards-clean
+  // for any incidental caller that hasn't been updated to the FR-4 contract.
+  const direction: ExtractDirection =
+    body.direction === 'outbound' ? 'outbound' : 'inbound'
+
   // check_and_increment_extraction is security definer — bypasses RLS.
   // Fail open on DB error so a rate-limit glitch never blocks a real user.
   const { data: allowed, error: rateLimitError } = await supabase.rpc(
@@ -68,7 +73,7 @@ export async function POST(request: Request) {
       system: [
         {
           type: 'text',
-          text: buildSystemPrompt(),
+          text: buildSystemPrompt(direction),
           cache_control: { type: 'ephemeral' },
         },
       ],

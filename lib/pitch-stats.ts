@@ -1,4 +1,5 @@
 import type { Pitch } from '@/lib/types/pitch'
+import type { Deal } from '@/lib/types/deal'
 
 export interface CurrencyTotal {
   currency: string // uppercase, trimmed
@@ -8,7 +9,15 @@ export interface CurrencyTotal {
 export interface PitchStats {
   pitchCount: number
   brandCount: number
+  /** Lifetime totals from `pitches.budget_amount` across all pitches (original
+   *  offers, direction-agnostic). Used for "Total tracked" displays such as
+   *  the /app/brands aggregate cell. */
   currencyTotals: CurrencyTotal[] // sorted desc by amount
+  /** "In pipeline" totals derived from `deals` table where stage is non-terminal.
+   *  Per FR-4 AC7.3 (2026-05-17): reads from `deals.current_budget_amount` filtered
+   *  to stages inbox / negotiating / confirmed; excludes delivered_paid + rejected
+   *  (terminal stages) + NULL budgets (typical for gifting_only deals). */
+  pipelineCurrencyTotals: CurrencyTotal[] // sorted desc by amount
 }
 
 function normalizeBrand(b: string | null): string | null {
@@ -23,22 +32,46 @@ function normalizeCurrency(c: string | null): string | null {
   return trimmed || null
 }
 
-export function computePitchStats(pitches: Pitch[]): PitchStats {
+export function computePitchStats(
+  pitches: Pitch[],
+  deals: Deal[]
+): PitchStats {
+  // Pitches saved (AC7.1) — direction-agnostic, deal-state-agnostic
   const pitchCount = pitches.length
 
+  // Brands tracked (AC7.2) — distinct normalized brand_name across all pitches
   const brandKeys = new Set<string>()
   for (const p of pitches) {
     const k = normalizeBrand(p.brand_name)
     if (k) brandKeys.add(k)
   }
 
-  const sumsByCurrency = new Map<string, number>()
+  // Lifetime currency totals — sum pitches.budget_amount (original offers).
+  // Used for /app/brands aggregate "Total tracked" display.
+  const lifetimeSums = new Map<string, number>()
   for (const p of pitches) {
     const c = normalizeCurrency(p.budget_currency)
     if (!c || !p.budget_amount || p.budget_amount <= 0) continue
-    sumsByCurrency.set(c, (sumsByCurrency.get(c) ?? 0) + p.budget_amount)
+    lifetimeSums.set(c, (lifetimeSums.get(c) ?? 0) + p.budget_amount)
   }
-  const currencyTotals: CurrencyTotal[] = Array.from(sumsByCurrency.entries())
+  const currencyTotals: CurrencyTotal[] = Array.from(lifetimeSums.entries())
+    .map(([currency, amount]) => ({ currency, amount }))
+    .sort((a, b) => b.amount - a.amount)
+
+  // In pipeline (AC7.3) — sum deals.current_budget_amount where stage is
+  // non-terminal (inbox / negotiating / confirmed). NULL budgets excluded.
+  // Direction-agnostic (both inbound + outbound count).
+  const pipelineSums = new Map<string, number>()
+  for (const d of deals) {
+    if (d.stage !== 'inbox' && d.stage !== 'negotiating' && d.stage !== 'confirmed') continue
+    if (!d.current_budget_amount || d.current_budget_amount <= 0) continue
+    const c = normalizeCurrency(d.current_budget_currency)
+    if (!c) continue
+    pipelineSums.set(c, (pipelineSums.get(c) ?? 0) + d.current_budget_amount)
+  }
+  const pipelineCurrencyTotals: CurrencyTotal[] = Array.from(
+    pipelineSums.entries()
+  )
     .map(([currency, amount]) => ({ currency, amount }))
     .sort((a, b) => b.amount - a.amount)
 
@@ -46,6 +79,7 @@ export function computePitchStats(pitches: Pitch[]): PitchStats {
     pitchCount,
     brandCount: brandKeys.size,
     currencyTotals,
+    pipelineCurrencyTotals,
   }
 }
 

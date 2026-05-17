@@ -1,19 +1,40 @@
 import { createClient } from '@/lib/supabase/server'
-import { Kanban } from '@/components/Kanban'
+import { Kanban, type DealWithPitch } from '@/components/Kanban'
 import { StatsStrip } from '@/components/StatsStrip'
 import { computePitchStats } from '@/lib/pitch-stats'
 import type { Pitch } from '@/lib/types/pitch'
+import type { Deal } from '@/lib/types/deal'
 
 export default async function AppPage() {
   const supabase = await createClient()
 
-  const { data: pitches, error } = await supabase
-    .from('pitches')
-    .select('*')
-    .order('created_at', { ascending: false })
+  // Fetch pitches + deals in parallel. RLS gates ownership on both.
+  const [pitchesResult, dealsResult] = await Promise.all([
+    supabase
+      .from('pitches')
+      .select('*')
+      .order('created_at', { ascending: false }),
+    supabase.from('deals').select('*'),
+  ])
 
-  const safePitches = (pitches ?? []) as Pitch[]
-  const stats = computePitchStats(safePitches)
+  const safePitches = (pitchesResult.data ?? []) as Pitch[]
+  const safeDeals = (dealsResult.data ?? []) as Deal[]
+
+  // Build joined view: each deal paired with its parent pitch. Deals whose
+  // parent pitch wasn't returned (shouldn't happen under FK + RLS but defensive)
+  // are dropped — the card needs both halves for display.
+  const pitchesById: Record<string, Pitch> = {}
+  for (const p of safePitches) pitchesById[p.id] = p
+
+  const items: DealWithPitch[] = []
+  for (const d of safeDeals) {
+    const parent = pitchesById[d.pitch_id]
+    if (!parent) continue
+    items.push({ deal: d, pitch: parent })
+  }
+
+  const stats = computePitchStats(safePitches, safeDeals)
+  const error = pitchesResult.error ?? dealsResult.error
 
   return (
     <div className="page">
@@ -28,12 +49,12 @@ export default async function AppPage() {
 
       {error ? (
         <p className="text-sm text-red-600">
-          Failed to load pitches: {error.message}
+          Failed to load board: {error.message}
         </p>
       ) : (
         <>
           <StatsStrip stats={stats} />
-          <Kanban pitches={safePitches} />
+          <Kanban items={items} />
         </>
       )}
     </div>

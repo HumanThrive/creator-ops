@@ -9,8 +9,8 @@ interface AddPitchTriggerProps {
 }
 
 export function AddPitchTrigger({
-  className = 'rounded bg-black px-3 py-1.5 text-sm font-medium text-white',
-  label = 'Add Pitch',
+  className = 'btn-pill',
+  label = 'Add pitch',
 }: AddPitchTriggerProps) {
   const [open, setOpen] = useState(false)
   return (

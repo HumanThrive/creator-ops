@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { AddPitchTrigger } from '@/components/AddPitchTrigger'
+import { SplitButton } from '@/components/SplitButton'
 import { UserMenu } from '@/components/UserMenu'
 
 interface TopBarProps {
@@ -29,10 +29,8 @@ export function TopBar({ initial }: TopBarProps) {
         </Link>
       </nav>
       <div className="topbar-spacer" />
-      <span className="topbar-meta">PHASE A · BUILD MODE</span>
       <div className="topbar-actions">
-        <AddPitchTrigger className="btn-pill topbar-add-pill" label="Add pitch" />
-        <AddPitchTrigger className="topbar-add-icon" label="+" />
+        <SplitButton />
         <UserMenu initial={initial} />
       </div>
     </header>

@@ -1,8 +1,4 @@
-export type PipelineStage =
-  | 'inbox'
-  | 'negotiating'
-  | 'confirmed'
-  | 'delivered_paid'
+export type PitchDirection = 'inbound' | 'outbound'
 
 export type PitchCategory =
   | 'legit'
@@ -16,6 +12,7 @@ export interface Pitch {
   id: string
   user_id: string
   raw_pitch_text: string
+  direction: PitchDirection
   brand_name: string | null
   sender_name: string | null
   deliverables: string[]
@@ -25,7 +22,6 @@ export interface Pitch {
   deadline: string | null
   category: PitchCategory
   ai_summary: string | null
-  pipeline_stage: PipelineStage
   user_notes: string | null
   created_at: string
   updated_at: string

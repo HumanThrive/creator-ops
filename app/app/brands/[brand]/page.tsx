@@ -5,6 +5,8 @@ import { BrandHistoryTable } from '@/components/BrandHistoryTable'
 import { findBrandDetail, formatCurrencyAmount } from '@/lib/pitch-stats'
 import { formatFullDate, formatRelativeTime } from '@/lib/format'
 import type { Pitch } from '@/lib/types/pitch'
+import type { Deal } from '@/lib/types/deal'
+import type { Activity } from '@/lib/types/activity'
 
 interface BrandDetailPageProps {
   params: Promise<{ brand: string }>
@@ -23,6 +25,33 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
   const detail = findBrandDetail((pitches ?? []) as Pitch[], brandSlug)
   // Spec §6.4: silent redirect when slug doesn't resolve to a brand the user has.
   if (!detail) redirect('/app/brands')
+
+  // Per FR-4 S5 (AC5.1–AC5.3): fetch the deal + activity log for each pitch in
+  // this brand's set so the timeline renders direction-aware rows + current
+  // deal state + per-pitch activity log subsection.
+  const pitchIds = detail.pitches.map((p) => p.id)
+  const [dealsResult, activitiesResult] = await Promise.all([
+    supabase.from('deals').select('*').in('pitch_id', pitchIds),
+    supabase
+      .from('activities')
+      .select('*')
+      .in('pitch_id', pitchIds)
+      .order('created_at', { ascending: true }),
+  ])
+
+  const dealsByPitchId: Record<string, Deal | undefined> = {}
+  for (const d of dealsResult.data ?? []) {
+    const deal = d as Deal
+    dealsByPitchId[deal.pitch_id] = deal
+  }
+
+  const activitiesByPitchId: Record<string, Activity[]> = {}
+  for (const a of activitiesResult.data ?? []) {
+    const activity = a as Activity
+    const bucket = activitiesByPitchId[activity.pitch_id] ?? []
+    bucket.push(activity)
+    activitiesByPitchId[activity.pitch_id] = bucket
+  }
 
   const repeatLabel = detail.pitchCount === 1 ? '1st touch' : 'Repeat customer'
   const kicker = detail.isUnknown
@@ -79,7 +108,11 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
         </div>
       </div>
 
-      <BrandHistoryTable pitches={detail.pitches} />
+      <BrandHistoryTable
+        pitches={detail.pitches}
+        dealsByPitchId={dealsByPitchId}
+        activitiesByPitchId={activitiesByPitchId}
+      />
     </div>
   )
 }

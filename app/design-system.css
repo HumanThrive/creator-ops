@@ -21,6 +21,14 @@
   --line: rgba(10, 10, 10, 0.10);
   --line-2: rgba(10, 10, 10, 0.18);
 
+  /* Secondary cool-slate accent — committed for board / eye-resting surfaces.
+     Sits behind data-dense surfaces (Kanban columns, stats strip, history
+     header, pitch-detail modal sections). Warm paper stays on identity / CTA
+     surfaces (signin, topbar active pill, brand-row hover, user dropdown). */
+  --paper-board: #F6F7FB;
+  --line-board: #DDE0E9;
+  --slate-edge: #9CA3AF;
+
   /* Font stacks — each next/font variable provides the primary face;
      fallback chain catches the brief moment before the self-hosted
      font is ready, plus environments where the variable isn't set
@@ -89,6 +97,115 @@
   border-radius: 50%;
 }
 .btn-pill:hover { transform: translateY(-1px); }
+
+/* ─────────── Split-button (TopBar Add Pitch) ─────────── */
+
+.btn-split {
+  display: inline-flex; align-items: stretch;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+  position: relative;
+}
+.btn-split-main, .btn-split-caret {
+  font-family: var(--body);
+  font-size: 13.5px; font-weight: 600;
+  letter-spacing: 0.02em;
+  background: transparent;
+  border: 0; color: inherit;
+  cursor: pointer;
+}
+.btn-split-main {
+  padding: 9px 14px 9px 12px;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.btn-split-main::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+}
+.btn-split-divider {
+  width: 1px;
+  background: color-mix(in oklab, var(--paper) 24%, transparent);
+}
+.btn-split-caret {
+  padding: 9px 12px 9px 10px;
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px;
+}
+.btn-split-caret-icon {
+  font-family: var(--mono); font-size: 13px; transform: translateY(-1px);
+}
+.btn-split:hover { background: color-mix(in oklab, var(--ink) 88%, white); }
+
+.btn-split-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 240px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  box-shadow: 0 18px 36px -10px rgba(10,10,10,0.20);
+  z-index: 40;
+  padding: 6px;
+  display: flex; flex-direction: column;
+  animation: dropIn 0.12s ease-out both;
+}
+@keyframes dropIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.btn-split-menu-item {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  font-family: var(--body);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+}
+.btn-split-menu-item:hover { background: var(--paper-2); color: var(--ink); }
+.btn-split-menu-item .dir-arrow {
+  font-size: 16px;
+  color: var(--accent);
+}
+.btn-split-menu-item-sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  grid-column: 2;
+}
+
+/* Mobile collapse — main + divider hide, caret morphs into a 36px round
+   `+` icon. Per design CLAUDE.md, the entire split collapses to a single
+   touch target on narrow containers. */
+@container app (max-width: 720px) {
+  .btn-split {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    padding: 0;
+  }
+  .btn-split-main, .btn-split-divider { display: none; }
+  .btn-split-caret {
+    width: 100%; height: 100%;
+    justify-content: center;
+    padding: 0;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 18px;
+  }
+  .btn-split-caret-icon::before { content: "+"; }
+  .btn-split-caret-icon { font-size: 0; }
+  .btn-split-menu { right: 0; min-width: 220px; }
+}
 
 /* Pill button — ghost */
 .btn-ghost {
@@ -167,6 +284,8 @@
   background: var(--paper);
   color: var(--ink);
   display: flex; flex-direction: column;
+  container-type: inline-size;
+  container-name: app;
 }
 
 .topbar {
@@ -220,18 +339,6 @@
 
 .topbar-spacer { flex: 1; }
 
-.topbar-meta {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-4);
-  display: flex; align-items: center; gap: 8px;
-}
-.topbar-meta::before {
-  content: ""; width: 32px; height: 1px; background: var(--line-2);
-}
-
 .topbar-actions { display: flex; align-items: center; gap: 10px; }
 
 .topbar-avatar {
@@ -244,6 +351,288 @@
   letter-spacing: 0.04em;
   cursor: pointer;
 }
+
+/* Add-pitch trigger wrapper (kept for legacy compatibility — current trigger is
+   a single button; no dropdown anchor needed post-2026-05-17 redesign). */
+.add-pitch-menu { position: relative; display: inline-block; }
+
+/* ─────────── Add Pitch modal (FR-4 redesign by Founder 2026-05-17) ─────────── */
+
+.add-modal {
+  background: var(--paper);
+  width: calc(100% - 32px);
+  max-width: 1120px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  margin: 32px auto;
+  max-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.add-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--paper-2);
+  border-bottom: 1px solid var(--line-2);
+  padding: 14px 28px;
+  flex-shrink: 0;
+}
+.add-modal-head-l {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.add-modal-kicker {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.add-modal-kicker-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.add-modal-direction-pill {
+  display: inline-flex;
+  background: var(--paper);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 2px;
+}
+.add-modal-direction-btn {
+  padding: 6px 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+.add-modal-direction-btn.active {
+  background: var(--ink);
+  color: var(--paper);
+}
+.add-modal-direction-btn:hover:not(.active) {
+  color: var(--ink);
+}
+
+.add-modal-body {
+  padding: 28px 32px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.add-modal-hero { margin-bottom: 24px; }
+.add-modal-title {
+  font-family: var(--display, var(--body));
+  font-size: clamp(40px, 5vw, 64px);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 0.95;
+  margin: 0 0 12px;
+  color: var(--ink);
+  text-transform: uppercase;
+}
+.add-modal-title-dot { color: var(--accent); }
+.add-modal-subtitle {
+  font-size: 14px;
+  color: var(--ink-3);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 60ch;
+}
+
+.add-modal-section { margin-top: 4px; }
+.add-modal-section-kicker {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.add-modal-textarea {
+  width: 100%;
+  padding: 16px 18px;
+  background: var(--paper-2);
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  font-family: var(--body);
+  font-size: 14px;
+  color: var(--ink);
+  line-height: 1.55;
+  resize: vertical;
+}
+.add-modal-textarea::placeholder {
+  font-style: italic;
+  color: var(--ink-4);
+}
+.add-modal-textarea:focus {
+  outline: none;
+  border-color: var(--ink-3);
+}
+.add-modal-textarea:disabled { opacity: 0.6; }
+
+/* Status bar between textarea and fields */
+.add-modal-status {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: var(--paper-2);
+  border-left: 3px solid var(--ink-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-radius: 0 2px 2px 0;
+}
+.add-modal-status-success { border-left-color: var(--accent); }
+.add-modal-status-loading { border-left-color: var(--ink-3); }
+.add-modal-status-error { border-left-color: var(--accent); }
+.add-modal-status-l {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink);
+  flex-grow: 1;
+}
+.add-modal-status-l .muted,
+.add-modal-status-l.muted { color: var(--ink-3); }
+.add-modal-status-r {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+}
+.add-modal-status-action {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--ink);
+  padding: 4px 8px;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+.add-modal-status-action:hover { color: var(--accent); }
+
+/* Extracted-fields grid */
+.add-modal-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 28px;
+  margin-top: 24px;
+}
+.add-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.add-modal-field-full { grid-column: 1 / -1; }
+.add-modal-field-kicker {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.add-modal-field-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--paper);
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  font-family: var(--body);
+  font-size: 14px;
+  color: var(--ink);
+  transition: border-color 0.15s;
+}
+.add-modal-field-input:focus {
+  outline: none;
+  border-color: var(--ink-3);
+}
+.add-modal-field-budget-row {
+  display: flex;
+  gap: 8px;
+}
+.add-modal-field-budget-amount { flex: 2; }
+.add-modal-field-budget-currency { flex: 1; max-width: 100px; }
+
+/* Footer */
+.add-modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 28px;
+  border-top: 1px solid var(--line-2);
+  background: var(--paper);
+  flex-shrink: 0;
+}
+.add-modal-flow-kicker {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+.add-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.add-modal-cancel {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--ink-3);
+  padding: 8px 4px;
+  transition: color 0.15s;
+}
+.add-modal-cancel:hover { color: var(--ink); }
+.add-modal-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.add-modal-save:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Responsive — collapse 2-col field grid on narrow containers (per design
+   handoff: every `/app/*` surface narrows via `@container app`, not viewport). */
+@container app (max-width: 720px) {
+  .add-modal-fields { grid-template-columns: 1fr; }
+  .add-modal-body { padding: 20px 18px; }
+  .add-modal-head { padding: 12px 18px; }
+  .add-modal-foot { padding: 12px 18px; }
+  .add-modal-head-l { gap: 12px; flex-wrap: wrap; }
+}
+
 
 /* User menu — circle trigger + dropdown */
 .user-menu { position: relative; }
@@ -293,19 +682,6 @@
   transition: background 0.12s, color 0.12s;
 }
 .user-menu-item:hover { background: var(--paper-2); color: var(--ink); }
-
-/* Mobile-only circle add-pitch button — hidden on desktop */
-.topbar-add-icon {
-  display: none;
-  align-items: center; justify-content: center;
-  width: 36px; height: 36px;
-  border-radius: 50%;
-  background: var(--accent); color: var(--paper);
-  font-size: 22px; font-weight: 300; line-height: 1;
-  cursor: pointer;
-  border: none;
-  flex-shrink: 0;
-}
 
 /* ─────────── Page header ─────────── */
 
@@ -451,8 +827,8 @@
   align-items: start;
 }
 .col {
-  background: var(--paper-2);
-  border: 1px solid var(--line);
+  background: var(--paper-board);
+  border: 1px solid var(--line-board);
   border-radius: 6px;
   padding: 14px;
   display: flex; flex-direction: column; gap: 12px;
@@ -461,15 +837,18 @@
 .col-head {
   display: flex; align-items: center; justify-content: space-between;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-board);
 }
 .col-head-l { display: flex; align-items: center; gap: 8px; }
+/* Softened from Anton uppercase to Archivo semibold mixed-case — the display
+   font made the board feel "shouty" against the count chip + cards. Archivo
+   reads as a label, not a banner. */
 .col-head strong {
-  font-family: var(--display);
-  font-size: 16px;
-  font-weight: 400;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .col-n {
   font-family: var(--mono);
@@ -483,17 +862,26 @@
 .col-cards { display: flex; flex-direction: column; gap: 8px; }
 
 .card {
+  position: relative;
   background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 5px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   padding: 12px 13px;
   display: flex; flex-direction: column; gap: 6px;
   cursor: pointer;
+  box-shadow:
+    0 1px 2px rgba(10, 14, 28, 0.05),
+    0 4px 12px -4px rgba(10, 14, 28, 0.08);
   transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
 }
+/* `.has-dir` lifts content below the top-left direction ribbon so the brand
+   name doesn't tuck under the badge corner. */
+.card.has-dir { padding-top: 22px; }
 .card:hover {
-  border-color: var(--ink);
   transform: translateY(-1px);
+  box-shadow:
+    0 2px 4px rgba(10, 14, 28, 0.06),
+    0 10px 24px -6px rgba(10, 14, 28, 0.14);
 }
 .card-r1 {
   display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
@@ -514,21 +902,30 @@
   letter-spacing: 0.04em;
   margin-top: 2px;
 }
-.card.is-spotlight { border-color: var(--accent); position: relative; }
+.card.is-spotlight {
+  position: relative;
+  box-shadow:
+    0 0 0 1.5px var(--accent),
+    0 2px 4px rgba(232, 58, 31, 0.10),
+    0 10px 24px -6px rgba(232, 58, 31, 0.18);
+}
+.card.is-spotlight:hover {
+  box-shadow:
+    0 0 0 1.5px var(--accent),
+    0 4px 8px rgba(232, 58, 31, 0.14),
+    0 14px 28px -6px rgba(232, 58, 31, 0.22);
+}
 .card.is-spotlight::before {
   content: ""; position: absolute; top: 8px; right: 8px;
   width: 6px; height: 6px; background: var(--accent); border-radius: 50%;
 }
 
-/* ─────────── /app page — mobile (≤640px) ─────────── */
+/* ─────────── /app page — mobile (container ≤720px) ─────────── */
 
-@media (max-width: 640px) {
+@container app (max-width: 720px) {
   /* Top bar */
   .topbar { padding: 12px 16px; gap: 10px; }
   .topbar-nav { margin-left: 0; }
-  .topbar-meta { display: none; }
-  .topbar-add-pill { display: none; }
-  .topbar-add-icon { display: flex; }
   .user-menu-trigger { width: 36px; height: 36px; }
 
   /* Page */
@@ -609,7 +1006,7 @@
 
 .brand-list {
   display: flex; flex-direction: column;
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line-board);
   border-radius: 6px;
   overflow: hidden;
   background: var(--paper);
@@ -714,8 +1111,8 @@
 
 .brand-row-divider { display: none; }
 
-/* /app/brands — mobile (≤640px) — card-stack reorg */
-@media (max-width: 640px) {
+/* /app/brands — mobile (container ≤720px) — card-stack reorg */
+@container app (max-width: 720px) {
   .brands-tools {
     flex-direction: column;
     align-items: stretch;
@@ -842,9 +1239,79 @@
 }
 .bd-meta-v.accent { color: var(--accent); }
 
+/* Board tools — row above the Kanban: left count + right direction filter */
+.board-tools {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.board-tools-l {
+  font-family: var(--mono);
+  font-size: 10.5px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.board-tools-l b { color: var(--ink); font-weight: 600; }
+
+/* Direction filter — pill segmented control (FR-4 S6) */
+.dir-filter {
+  display: inline-flex; align-items: center; gap: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 3px;
+  background: var(--paper);
+}
+.dir-filter-l {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 0 12px 0 14px;
+}
+.dir-filter-btn {
+  font-family: var(--body);
+  font-size: 12px; font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 6px 14px;
+  background: transparent;
+  border: 0;
+  color: var(--ink-3);
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.dir-filter-btn .dir-arrow { font-size: 13px; color: var(--ink-3); }
+.dir-filter-btn:hover { color: var(--ink); }
+.dir-filter-btn:hover .dir-arrow { color: var(--ink); }
+.dir-filter-btn.is-active {
+  background: var(--ink);
+  color: var(--paper);
+}
+.dir-filter-btn.is-active .dir-arrow { color: var(--accent); }
+
+/* Card direction badge (Kanban) — ribbon anchored to the card corner.
+   Card border is now transparent + shadow, so the ribbon lives at
+   the true edge (top:0 left:0) rather than tucking under a 1px stroke. */
+.card-dir {
+  position: absolute;
+  top: 0; left: 0;
+  background: var(--accent);
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3px 8px 3px 6px;
+  border-radius: 6px 0 4px 0;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.card-dir.is-outbound { background: var(--ink); }
+
 /* Pitch history table */
 .history {
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line-board);
   border-radius: 6px;
   overflow: hidden;
   background: var(--paper);
@@ -854,8 +1321,8 @@
   grid-template-columns: 110px 130px 110px 1fr 32px;
   gap: 18px;
   padding: 12px 24px;
-  background: var(--paper-2);
-  border-bottom: 1px solid var(--line-2);
+  background: var(--paper-board);
+  border-bottom: 1px solid var(--line-board);
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.12em;
@@ -897,6 +1364,62 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Direction indicator stacked under date in each history row (FR-4 S5).
+   Matches the design's `.dir.dir-sm` shape — mono uppercase microcopy. */
+.history-direction {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+/* Activity log subsection below each pitch row (FR-4 S5).
+   Collapsed by default; toggle expands to chronological list (oldest first). */
+.history-activity-log {
+  padding: 4px 24px 12px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+.history-activity-log:last-child { border-bottom: none; }
+.history-activity-log-toggle {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.history-activity-log-toggle:hover { color: var(--accent); }
+.history-activity-list {
+  list-style: none;
+  padding: 6px 0 0 12px;
+  margin: 0;
+  border-left: 1px solid var(--line-2);
+}
+.history-activity-item {
+  display: flex;
+  gap: 12px;
+  padding: 3px 0;
+}
+.history-activity-time {
+  flex-shrink: 0;
+  width: 100px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-4);
+}
+.history-activity-label {
+  flex-grow: 1;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
 .history-arrow {
   font-family: var(--mono);
   font-size: 14px;
@@ -930,12 +1453,18 @@
 .stage.inbox::before { background: var(--ink-4); }
 .stage.negotiating { border-color: var(--accent); color: var(--accent); }
 .stage.negotiating::before { background: var(--accent); }
-.stage.confirmed { border-color: var(--ink); color: var(--ink); background: var(--paper-2); }
+.stage.confirmed { border-color: var(--ink); color: var(--ink); }
 .stage.confirmed::before { background: var(--ink); }
-.stage.delivered { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+/* Delivered = win state. The spike (accent dot) is the only red surface.
+   Border + text stay ink; the win lives in the dot, not a fill. */
+.stage.delivered { border-color: var(--ink); color: var(--ink); }
 .stage.delivered::before { background: var(--accent); }
 .stage.notpitch { color: var(--ink-4); }
 .stage.notpitch::before { background: transparent; border: 1px solid var(--ink-4); width: 4px; height: 4px; }
+/* Rejected = closed-lost terminal state for deals. Faded outlined-only;
+   NOT struck through (legible; signals closed-lost without aggression). */
+.stage.rejected { border-color: var(--line); color: var(--ink-4); }
+.stage.rejected::before { background: var(--ink-4); }
 
 /* ─────────── Pitch detail modal (/app, /app/brands/[brand]) ─────────── */
 
@@ -950,17 +1479,116 @@
   background: var(--paper);
   width: 100%; max-width: 920px;
   border-radius: 8px;
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line-board);
   overflow: hidden;
   display: flex; flex-direction: column;
   margin: 24px 0;
 }
 .pitch-modal-head {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 24px;
-  background: var(--paper-2);
-  border-bottom: 1px solid var(--line-2);
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 18px 24px;
+  background: var(--paper-board);
+  border-bottom: 1px solid var(--line-board);
   gap: 16px;
+}
+.pitch-modal-head-l {
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+/* Direction chip in the top band — pill with mono uppercase label + arrow.
+   Inbound = paper bg with accent arrow; outbound = ink bg with paper text. */
+.pitch-modal-dirchip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+}
+.pitch-modal-dirchip.is-outbound {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.pitch-modal-dirchip-arrow {
+  font-size: 13px;
+  line-height: 1;
+  color: var(--accent);
+}
+.pitch-modal-band-when {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Pipeline stage progression row — visual only (advance via Edit deal).
+   Shown beneath top band when a deal exists and isn't on the rejected
+   terminal state. `rejected` reachable only via Deal Edit modal per FR-4. */
+.pitch-modal-stage {
+  padding: 22px 32px;
+  border-bottom: 1px solid var(--line-board);
+}
+.pitch-modal-stage-l {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-bottom: 12px;
+}
+.pitch-modal-stage-l::before {
+  content: "";
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.pitch-modal-stages {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.pitch-modal-stage-btn {
+  font-family: var(--body);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 9px 16px;
+  background: transparent;
+  border: 1px solid var(--line-2);
+  color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.pitch-modal-stage-btn::before {
+  content: "";
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid var(--ink-3);
+}
+.pitch-modal-stage-btn.is-current {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.pitch-modal-stage-btn.is-current::before {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.pitch-modal-stage-btn.is-past {
+  border-color: color-mix(in oklab, var(--accent) 30%, var(--line-2));
+  color: var(--ink);
+}
+.pitch-modal-stage-btn.is-past::before {
+  background: color-mix(in oklab, var(--accent) 50%, transparent);
+  border-color: transparent;
 }
 .pitch-modal-close {
   font-family: var(--mono);
@@ -977,7 +1605,14 @@
 .pitch-modal-close:hover { color: var(--ink); }
 .pitch-modal-close .x { font-size: 18px; line-height: 1; }
 
-.pitch-read, .pitch-edit {
+/* Read-view body is a flush column — each section owns its own padding
+   so the bottom divider extends edge-to-edge of the modal. `.pitch-edit`
+   keeps inset padding because edit-mode is a single contiguous form, not
+   the stacked-slabs read layout. */
+.pitch-read {
+  display: flex; flex-direction: column;
+}
+.pitch-edit {
   padding: 32px 32px 28px;
   display: flex; flex-direction: column;
   gap: 28px;
@@ -986,8 +1621,8 @@
 .pitch-hero {
   display: flex; flex-direction: column;
   gap: 14px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--line);
+  padding: 36px 32px 28px;
+  border-bottom: 1px solid var(--line-board);
 }
 .pitch-hero-h1 {
   font-family: var(--display);
@@ -1012,6 +1647,19 @@
 .pitch-section {
   display: flex; flex-direction: column;
   gap: 14px;
+  padding: 28px 32px;
+  border-bottom: 1px solid var(--line-board);
+}
+/* Modifier: deal section sits on slate ground per design — it's the
+   "negotiation in flight" surface, distinct from the original pitch facts
+   above and the AI-derived blocks below. Applied to both the populated and
+   empty-state variants so the section reads consistently. */
+.pitch-section.is-deal {
+  background: var(--paper-board);
+}
+.pitch-read > .pitch-section:last-child,
+.pitch-read .pdetail-pane:last-child .pitch-section:last-child {
+  border-bottom: none;
 }
 
 .pitch-stage-row {
@@ -1057,13 +1705,11 @@
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 0;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  overflow: hidden;
+  border-bottom: 1px solid var(--line-board);
 }
 .pitch-cell {
-  padding: 18px 20px;
-  border-right: 1px solid var(--line);
+  padding: 22px 24px 24px;
+  border-right: 1px solid var(--line-board);
   display: flex; flex-direction: column; gap: 14px;
   min-height: 110px;
 }
@@ -1145,22 +1791,25 @@
   font-family: var(--body);
   font-size: 14px;
   color: var(--ink);
-  background: var(--paper-2);
-  border: 1px solid var(--line);
+  background: var(--paper-board);
+  border: 1px solid var(--line-board);
   border-radius: 6px;
   padding: 14px;
   resize: vertical;
   min-height: 100px;
 }
+/* Focus reverts the notes textarea to warm paper + ink border so the editing
+   surface reads as the active interaction target against the slate ground. */
 .pitch-notes:focus {
   outline: none;
-  border-color: var(--ink-4);
+  background: var(--paper);
+  border-color: var(--ink);
 }
 
 .pitch-source {
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px 0 0;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--line-board);
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.04em;
@@ -1191,7 +1840,7 @@
   display: flex; align-items: center; justify-content: space-between;
   padding: 16px 24px;
   background: var(--paper);
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--line-board);
   gap: 16px;
 }
 .pitch-modal-delete {
@@ -1219,6 +1868,274 @@
   margin: 0;
 }
 
+/* Initial-load placeholder — holds the body + footer until the deal
+   lookup resolves so the pipeline-stage row never pops in after the rest
+   of the content. Minimum height keeps the modal from jumping when the
+   real content lands. */
+.pitch-modal-loading {
+  display: flex; align-items: center; justify-content: center;
+  padding: 64px 32px;
+  min-height: 360px;
+  color: var(--ink-3);
+}
+
+/* ─────────── Pitch detail — mobile tab system ─────────── */
+
+/* Desktop default: tabs hidden, panes layout-neutral. The pane wrappers stay
+   in the DOM so the JSX is the same on both layouts; they just disappear
+   visually via `display: contents` so children flow into `.pitch-read`'s
+   flex column directly. */
+.pdetail-tabs { display: none; }
+.pdetail-pane { display: contents; }
+
+.pdetail-deal-empty {
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: 14px;
+  padding: 18px 22px;
+  background: var(--paper);
+  border: 1px dashed var(--line-board);
+}
+.pdetail-deal-empty-text {
+  font-size: 14.5px;
+  color: var(--ink-2);
+  margin: 0;
+  max-width: 56ch;
+  line-height: 1.5;
+}
+.pdetail-deal-empty-text strong { color: var(--ink); font-weight: 600; }
+
+/* Deal section header — kicker on the left, "Edit deal" pill on the right.
+   Per design, the Edit deal entry point lives inside the section rather
+   than in the footer; the footer is reserved for stage advancement. */
+.pdetail-deal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px;
+}
+.pdetail-deal-edit {
+  font-family: var(--body);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: transparent;
+  border: 1px solid var(--line-2);
+  color: var(--ink);
+  cursor: pointer;
+  padding: 8px 16px;
+  display: inline-flex; align-items: center; gap: 8px;
+  border-radius: 999px;
+}
+.pdetail-deal-edit:hover { border-color: var(--ink); }
+.pdetail-deal-edit-icon {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+/* Deal section content — 3-column grid: stage / current budget / current
+   deliverables. Cell labels are the small mono kickers; values vary by cell
+   (chip, Anton numeric, or bullet list). */
+.pdetail-deal-grid {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+.pdetail-deal-cell {
+  display: flex; flex-direction: column;
+  gap: 8px;
+}
+.pdetail-deal-cell-l {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.pdetail-deal-cell-v {
+  font-family: var(--body);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.005em;
+}
+.pdetail-deal-cell-v.is-amount {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 26px;
+  letter-spacing: -0.005em;
+  text-transform: uppercase;
+}
+.pdetail-deal-cell-v.is-empty {
+  color: var(--ink-3);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 14px;
+}
+.pdetail-deal-deliverables {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.pdetail-deal-deliverables li {
+  font-family: var(--body);
+  font-size: 13.5px;
+  color: var(--ink-2);
+  display: inline-flex; align-items: baseline; gap: 8px;
+}
+.pdetail-deal-deliverables li::before {
+  content: "—";
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+/* Scope notes within an attached deal block — quieter than the AI summary
+   callout. Italic body copy with a dashed top divider, so the scope note
+   reads as a closing footnote on the deal rather than a hero quote. */
+.pitch-deal-notes {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line-2);
+  font-family: var(--body);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  font-style: italic;
+}
+
+/* Activity timeline — vertical-line + dotted-circle pattern (PitchDetailModal
+   activity pane). Per design: a 1px line sits at the left edge; each event
+   is a 3-column grid (dot · body · timestamp); the dot z-indexes over the
+   line so the visual reads as "circle on a thread." Accent variants
+   highlight state-progressing events (deal opened, stage moved); ink
+   variant anchors origin events (pitch saved). */
+.timeline {
+  display: flex; flex-direction: column;
+  position: relative;
+}
+.timeline::before {
+  content: "";
+  position: absolute;
+  top: 6px; bottom: 6px;
+  left: 5px;
+  width: 1px;
+  background: var(--line-2);
+}
+.tl-event {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  gap: 14px;
+  align-items: start;
+  padding: 8px 0 12px;
+  position: relative;
+}
+.tl-dot {
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 2px solid var(--line-2);
+  margin-top: 5px;
+  z-index: 1;
+}
+.tl-event.is-accent .tl-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.tl-event.is-ink .tl-dot {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.tl-body { display: flex; flex-direction: column; gap: 4px; }
+.tl-type {
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.005em;
+}
+.tl-payload {
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--ink-3);
+  line-height: 1.45;
+}
+.tl-when {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+@container app (max-width: 720px) {
+  .pdetail-tabs {
+    display: flex;
+    gap: 6px;
+    padding: 12px 22px;
+    background: var(--paper);
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  .pdetail-tab-btn {
+    flex: 1;
+    padding: 9px 10px;
+    background: transparent;
+    border: 1px solid var(--line-2);
+    color: var(--ink-3);
+    font-family: var(--body);
+    font-size: 12.5px;
+    font-weight: 600;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .pdetail-tab-btn:hover { color: var(--ink); border-color: var(--ink-3); }
+  .pdetail-tab-btn.is-active {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+  .pdetail-tab-n {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    background: var(--paper-2);
+    color: var(--ink-3);
+    padding: 2px 6px;
+    border-radius: 999px;
+    letter-spacing: 0.04em;
+  }
+  .pdetail-tab-btn.is-active .pdetail-tab-n {
+    background: rgba(255, 255, 255, 0.18);
+    color: var(--paper);
+  }
+
+  /* Mobile: each pane becomes its own flex column. Children are already
+     full-width slabs with internal padding + border-bottom, so no gap needed
+     between them. Inactive panes hide via the data-tab attribute on the
+     `.pitch-modal` parent. Multiple `data-pane="pitch"` divs are allowed and
+     all reveal together when the Pitch tab is active. */
+  .pdetail-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .pitch-modal[data-tab="pitch"]    .pdetail-pane[data-pane="deal"],
+  .pitch-modal[data-tab="pitch"]    .pdetail-pane[data-pane="activity"],
+  .pitch-modal[data-tab="deal"]     .pdetail-pane[data-pane="pitch"],
+  .pitch-modal[data-tab="deal"]     .pdetail-pane[data-pane="activity"],
+  .pitch-modal[data-tab="activity"] .pdetail-pane[data-pane="pitch"],
+  .pitch-modal[data-tab="activity"] .pdetail-pane[data-pane="deal"] {
+    display: none;
+  }
+}
+
 .btn-outline {
   font-family: var(--body);
   font-weight: 500;
@@ -1234,9 +2151,51 @@
 .btn-outline:hover { background: var(--paper-2); }
 .btn-outline:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* Pitch-detail footer buttons — Edit details is a rectangle (no radius),
+   the primary advance ("Move to ...") is the signature dark pill with a
+   leading accent dot. Per design `.pdetail-edit` / `.pdetail-primary`. */
+.pdetail-edit,
+.pdetail-primary {
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 12px 20px;
+  cursor: pointer;
+  border: 1px solid var(--ink);
+  display: inline-flex; align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+.pdetail-edit { background: var(--paper); color: var(--ink); }
+.pdetail-edit:hover { background: var(--paper-3); }
+.pdetail-primary {
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 999px;
+  padding: 12px 22px 12px 18px;
+}
+.pdetail-primary::before {
+  content: "";
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.pdetail-primary:hover {
+  background: color-mix(in oklab, var(--ink) 88%, white);
+}
+.pdetail-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pdetail-primary .arr {
+  font-family: var(--mono);
+  font-size: 14px;
+}
+
 .pitch-edit { gap: 18px; }
 
-@media (max-width: 640px) {
+@container app (max-width: 720px) {
   .pitch-modal-overlay { padding: 0; }
   .pitch-modal {
     max-width: none;
@@ -1245,24 +2204,40 @@
     min-height: 100dvh;
     border: none;
   }
-  .pitch-modal-head { padding: 12px 16px; }
-  .pitch-read, .pitch-edit { padding: 22px 16px 22px; gap: 22px; }
+
+  /* Reduce x-padding from 32px (desktop) to 16px on every section so
+     content reaches closer to the modal edges on small screens. Vertical
+     padding tightens too. Section bottom borders still run edge-to-edge
+     because they're applied to the section element itself. */
+  .pitch-modal-head { padding: 14px 16px; }
+  .pitch-hero { padding: 28px 16px 22px; }
+  .pitch-modal-stage { padding: 18px 16px; }
+  .pitch-section { padding: 22px 16px; }
+  .pitch-cell { padding: 16px 16px 18px; }
+  .pitch-modal-foot { padding: 14px 16px; flex-wrap: wrap; }
+  .pdetail-tabs { padding: 12px 16px; }
+  .pitch-edit { padding: 22px 16px; gap: 22px; }
+
   .pitch-hero-h1 { font-size: clamp(44px, 11vw, 64px); }
-  .pitch-grid { grid-template-columns: 1fr; }
+
+  /* Receipts grid → 2 columns on mobile. The full 4-cell layout (Sender /
+     Budget / Deadline / Category) becomes a 2×2 grid. Right border on the
+     left column, bottom border on the top row — only when 4 cells exist
+     (outbound pitches render just 2 cells, so the bottom-row divider is
+     skipped via `:has`). */
+  .pitch-grid { grid-template-columns: 1fr 1fr; }
   .pitch-cell {
-    border-right: none;
-    border-bottom: 1px solid var(--line);
+    border-right: 1px solid var(--line-board);
     min-height: auto;
   }
-  .pitch-cell:last-child { border-bottom: none; }
-  .pitch-source { flex-direction: column; align-items: flex-start; }
-  .pitch-modal-foot {
-    padding: 14px 16px;
-    flex-wrap: wrap;
+  .pitch-cell:nth-child(2n) { border-right: none; }
+  .pitch-grid:has(> .pitch-cell:nth-child(3)) > .pitch-cell:nth-child(-n+2) {
+    border-bottom: 1px solid var(--line-board);
   }
-  .pitch-stage-chip { padding: 10px 14px; }
-  .pitch-stage-chip,
-  .pitch-stage-chip + .pitch-stage-chip { flex: 1 1 calc(50% - 5px); justify-content: center; }
+
+  /* Deal section grid → single column on mobile so stage / budget /
+     deliverables stack vertically. */
+  .pdetail-deal-grid { grid-template-columns: 1fr; }
 }
 
 /* ─────────── Sign-in ─────────── */

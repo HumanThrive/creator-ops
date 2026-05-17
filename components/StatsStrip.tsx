@@ -18,7 +18,7 @@ export function StatsStrip({ stats }: StatsStripProps) {
     )
   }
 
-  const [primary, secondary, ...rest] = stats.currencyTotals
+  const [primary, secondary, ...rest] = stats.pipelineCurrencyTotals
   const overflowCount = rest.length
 
   return (

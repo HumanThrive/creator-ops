@@ -29,6 +29,10 @@
   --color-line: rgba(10, 10, 10, 0.10);
   --color-line-2: rgba(10, 10, 10, 0.18);
 
+  --color-paper-board: #F6F7FB;
+  --color-line-board: #DDE0E9;
+  --color-slate-edge: #9CA3AF;
+
   --font-display: var(--font-anton), 'Bebas Neue', 'Archivo Narrow', 'Helvetica Neue', sans-serif;
   --font-wordmark: var(--font-archivo-black), 'Helvetica Neue', sans-serif;
   --font-body: var(--font-archivo), 'Helvetica Neue', system-ui, sans-serif;

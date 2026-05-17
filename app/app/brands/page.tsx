@@ -3,18 +3,24 @@ import { BrandsList } from '@/components/BrandsList'
 import { AddPitchTrigger } from '@/components/AddPitchTrigger'
 import { computeBrandSummaries, computePitchStats } from '@/lib/pitch-stats'
 import type { Pitch } from '@/lib/types/pitch'
+import type { Deal } from '@/lib/types/deal'
 
 export default async function BrandsPage() {
   const supabase = await createClient()
 
-  const { data: pitches, error } = await supabase
-    .from('pitches')
-    .select('*')
-    .order('created_at', { ascending: false })
+  const [pitchesResult, dealsResult] = await Promise.all([
+    supabase
+      .from('pitches')
+      .select('*')
+      .order('created_at', { ascending: false }),
+    supabase.from('deals').select('*'),
+  ])
 
-  const safePitches = (pitches ?? []) as Pitch[]
-  const stats = computePitchStats(safePitches)
+  const safePitches = (pitchesResult.data ?? []) as Pitch[]
+  const safeDeals = (dealsResult.data ?? []) as Deal[]
+  const stats = computePitchStats(safePitches, safeDeals)
   const brands = computeBrandSummaries(safePitches)
+  const error = pitchesResult.error ?? dealsResult.error
 
   const isEmpty = brands.known.length === 0 && brands.unknown === null
 

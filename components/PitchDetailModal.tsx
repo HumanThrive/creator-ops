@@ -1,12 +1,23 @@
 'use client'
 
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Pitch, PipelineStage, PitchCategory } from '@/lib/types/pitch'
+import type { Pitch, PitchCategory } from '@/lib/types/pitch'
+import type { Deal, DealStage } from '@/lib/types/deal'
+import type { Activity } from '@/lib/types/activity'
 import { formatFullDate } from '@/lib/format'
 import { formatCurrencyAmount } from '@/lib/pitch-stats'
+import { formatActivityEvent } from '@/lib/activity-format'
 import { Spinner } from './Spinner'
+import { StageChip } from './StageChip'
+import { DealEditModal } from './DealEditModal'
 
 const CATEGORIES: PitchCategory[] = [
   'legit',
@@ -15,13 +26,6 @@ const CATEGORIES: PitchCategory[] = [
   'spam_or_scam',
   'unclear',
   'not_a_pitch',
-]
-
-const STAGES: { value: PipelineStage; label: string; variant: string }[] = [
-  { value: 'inbox', label: 'Inbox', variant: 'inbox' },
-  { value: 'negotiating', label: 'Negotiating', variant: 'negotiating' },
-  { value: 'confirmed', label: 'Confirmed', variant: 'confirmed' },
-  { value: 'delivered_paid', label: 'Delivered & paid', variant: 'delivered' },
 ]
 
 const CATEGORY_LABEL: Record<PitchCategory, string> = {
@@ -33,21 +37,74 @@ const CATEGORY_LABEL: Record<PitchCategory, string> = {
   not_a_pitch: 'Not a pitch',
 }
 
-// HARDCODED — design preview only; not stored data. Strip or replace once
-// industry / channel / sender-email / source-subject / category sub-tag are
-// captured for real (scope decision pending — see open-decisions / build-request).
-const HARDCODED = {
-  touchStatus: '1st touch',
-  industry: 'Athleisure',
-  channel: 'Email',
-  senderEmail: 'tomas@northform.co',
-  categorySubTag: 'Brand partnership · SS26',
-  sourceSubject: 'SS26 launch — partnership ask',
-  sourceFromEmail: 'tomas@northform.co',
+// Pipeline stage row — visualizes deal progression at the top of the modal.
+// `rejected` is a terminal off-pipeline state (reachable only via Deal Edit
+// modal per FR-4 design decision #5) and is excluded from this row.
+const STAGE_PROGRESSION: { value: DealStage; label: string }[] = [
+  { value: 'inbox', label: 'Inbox' },
+  { value: 'negotiating', label: 'Negotiating' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'delivered_paid', label: 'Delivered & paid' },
+]
+
+function stageProgressionState(
+  current: DealStage,
+  step: DealStage
+): 'past' | 'current' | 'future' {
+  if (current === step) return 'current'
+  const currentIdx = STAGE_PROGRESSION.findIndex((s) => s.value === current)
+  const stepIdx = STAGE_PROGRESSION.findIndex((s) => s.value === step)
+  if (currentIdx === -1 || stepIdx === -1) return 'future'
+  return stepIdx < currentIdx ? 'past' : 'future'
 }
+
+function nextPipelineStage(
+  current: DealStage
+): { value: DealStage; label: string } | null {
+  if (current === 'rejected' || current === 'delivered_paid') return null
+  const idx = STAGE_PROGRESSION.findIndex((s) => s.value === current)
+  if (idx === -1) return null
+  return STAGE_PROGRESSION[idx + 1] ?? null
+}
+
+const PITCH_EDITABLE_FIELDS = [
+  'brand_name',
+  'sender_name',
+  'deliverables',
+  'budget_amount',
+  'budget_currency',
+  'budget_notes',
+  'deadline',
+  'category',
+  'ai_summary',
+  'user_notes',
+] as const
 
 type AsyncState = 'idle' | 'loading' | 'error'
 type Mode = 'read' | 'edit'
+type Tab = 'pitch' | 'deal' | 'activity'
+
+function arraysEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false
+  return a.every((v, i) => v === b[i])
+}
+
+function computePitchDiff(
+  orig: Pitch,
+  draft: Pitch
+): Record<string, [unknown, unknown]> {
+  const diff: Record<string, [unknown, unknown]> = {}
+  for (const field of PITCH_EDITABLE_FIELDS) {
+    if (field === 'deliverables') {
+      if (!arraysEqual(orig.deliverables, draft.deliverables)) {
+        diff[field] = [orig.deliverables, draft.deliverables]
+      }
+    } else if (orig[field] !== draft[field]) {
+      diff[field] = [orig[field], draft[field]]
+    }
+  }
+  return diff
+}
 
 export function PitchDetailModal({
   pitch,
@@ -61,6 +118,14 @@ export function PitchDetailModal({
   const [state, setState] = useState<AsyncState>('idle')
   const [error, setError] = useState<string | null>(null)
   const [draft, setDraft] = useState<Pitch>(pitch)
+  // Deal lookup: undefined = checking; null = no deal exists; Deal = found.
+  const [deal, setDeal] = useState<Deal | null | undefined>(undefined)
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [dealEditOpen, setDealEditOpen] = useState(false)
+  // Mobile-only tab state — drives `data-tab` on `.pitch-modal`. On desktop
+  // (container >720px) all `.pdetail-pane` divs render via `display: contents`
+  // so this value is visually inert.
+  const [activeTab, setActiveTab] = useState<Tab>('pitch')
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -70,58 +135,201 @@ export function PitchDetailModal({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
+  const fetchDeal = useCallback(async () => {
+    const supabase = createClient()
+    const { data, error: lookupError } = await supabase
+      .from('deals')
+      .select('*')
+      .eq('pitch_id', pitch.id)
+      .limit(1)
+      .maybeSingle()
+    if (lookupError) {
+      console.error(
+        '[PitchDetailModal] deal lookup failed:',
+        lookupError.message
+      )
+      // Leave deal as-is rather than overwriting; user can retry by reopening.
+      return
+    }
+    setDeal((data as Deal | null) ?? null)
+  }, [pitch.id])
+
+  const fetchActivities = useCallback(async () => {
+    const supabase = createClient()
+    const { data, error: lookupError } = await supabase
+      .from('activities')
+      .select('*')
+      .eq('pitch_id', pitch.id)
+      .order('created_at', { ascending: true })
+    if (lookupError) {
+      console.error(
+        '[PitchDetailModal] activity lookup failed:',
+        lookupError.message
+      )
+      return
+    }
+    setActivities((data as Activity[] | null) ?? [])
+  }, [pitch.id])
+
+  useEffect(() => {
+    let cancelled = false
+    async function run() {
+      const supabase = createClient()
+      const [dealRes, activitiesRes] = await Promise.all([
+        supabase
+          .from('deals')
+          .select('*')
+          .eq('pitch_id', pitch.id)
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('activities')
+          .select('*')
+          .eq('pitch_id', pitch.id)
+          .order('created_at', { ascending: true }),
+      ])
+      if (cancelled) return
+      if (dealRes.error) {
+        console.error(
+          '[PitchDetailModal] deal lookup failed:',
+          dealRes.error.message
+        )
+        setDeal(null)
+      } else {
+        setDeal((dealRes.data as Deal | null) ?? null)
+      }
+      if (activitiesRes.error) {
+        console.error(
+          '[PitchDetailModal] activity lookup failed:',
+          activitiesRes.error.message
+        )
+      } else {
+        setActivities((activitiesRes.data as Activity[] | null) ?? [])
+      }
+    }
+    run()
+    return () => {
+      cancelled = true
+    }
+  }, [pitch.id])
+
   function update<K extends keyof Pitch>(key: K, value: Pitch[K]) {
     setDraft({ ...draft, [key]: value })
   }
 
-  async function persist(patch: Partial<Pitch>): Promise<boolean> {
+  async function onSave(e?: FormEvent) {
+    e?.preventDefault()
+    const diff = computePitchDiff(pitch, draft)
+    if (Object.keys(diff).length === 0) {
+      // Nothing changed; just exit edit mode.
+      setMode('read')
+      return
+    }
+
     setState('loading')
     setError(null)
     const supabase = createClient()
-    const { error: updateError } = await supabase
-      .from('pitches')
-      .update(patch)
-      .eq('id', pitch.id)
-    if (updateError) {
-      setError(updateError.message)
+    const { error: rpcError } = await supabase.rpc(
+      'update_pitch_with_activity',
+      {
+        p_pitch_id: pitch.id,
+        p_brand_name: draft.brand_name,
+        p_sender_name: draft.sender_name,
+        p_deliverables: draft.deliverables,
+        p_budget_amount: draft.budget_amount,
+        p_budget_currency: draft.budget_currency,
+        p_budget_notes: draft.budget_notes,
+        p_deadline: draft.deadline,
+        p_category: draft.category,
+        p_ai_summary: draft.ai_summary,
+        p_user_notes: draft.user_notes,
+        p_field_diffs: diff,
+      }
+    )
+    if (rpcError) {
+      setError(rpcError.message)
       setState('error')
-      return false
+      return
     }
-    return true
+    onClose()
+    router.refresh()
   }
 
-  async function onSave(e?: FormEvent) {
-    e?.preventDefault()
-    const ok = await persist({
-      brand_name: draft.brand_name,
-      sender_name: draft.sender_name,
-      deliverables: draft.deliverables,
-      budget_amount: draft.budget_amount,
-      budget_currency: draft.budget_currency,
-      budget_notes: draft.budget_notes,
-      deadline: draft.deadline,
-      category: draft.category,
-      ai_summary: draft.ai_summary,
-      pipeline_stage: draft.pipeline_stage,
-      user_notes: draft.user_notes,
-    })
-    if (ok) {
-      onClose()
-      router.refresh()
+  // ReadView notes auto-save on blur when user_notes changed in place. Without
+  // this, in-place note edits in ReadView would be silently lost (no Save button
+  // outside Edit mode). The RPC requires all pitch fields, so we pass the
+  // committed `pitch` values for everything except `user_notes` (which uses the
+  // draft).
+  async function persistUserNotesOnBlur() {
+    if (draft.user_notes === pitch.user_notes) return
+    const supabase = createClient()
+    const { error: rpcError } = await supabase.rpc(
+      'update_pitch_with_activity',
+      {
+        p_pitch_id: pitch.id,
+        p_brand_name: pitch.brand_name,
+        p_sender_name: pitch.sender_name,
+        p_deliverables: pitch.deliverables,
+        p_budget_amount: pitch.budget_amount,
+        p_budget_currency: pitch.budget_currency,
+        p_budget_notes: pitch.budget_notes,
+        p_deadline: pitch.deadline,
+        p_category: pitch.category,
+        p_ai_summary: pitch.ai_summary,
+        p_user_notes: draft.user_notes,
+        p_field_diffs: { user_notes: [pitch.user_notes, draft.user_notes] },
+      }
+    )
+    if (rpcError) {
+      console.error(
+        '[PitchDetailModal] note auto-save failed:',
+        rpcError.message
+      )
+      return
     }
+    router.refresh()
+  }
+
+  // Pre-populated draft handed to DealEditModal when the user picks "Start
+  // tracking deal" on a pitch with no deal yet. Seeded from the pitch's own
+  // values; id/user_id/timestamps are placeholders set by the create RPC.
+  const startTrackingDraft: Deal = {
+    id: '',
+    pitch_id: pitch.id,
+    user_id: '',
+    stage: 'inbox',
+    current_budget_amount: pitch.budget_amount,
+    current_budget_currency: pitch.budget_currency,
+    current_deliverables: pitch.deliverables,
+    current_scope_notes: null,
+    created_at: '',
+    updated_at: '',
   }
 
   async function onAdvanceStage() {
-    const next = nextStage(draft.pipeline_stage)
+    if (!deal) return
+    const next = nextPipelineStage(deal.stage)
     if (!next) return
-    const ok = await persist({
-      pipeline_stage: next.value,
-      user_notes: draft.user_notes,
-    })
-    if (ok) {
-      onClose()
-      router.refresh()
+    setState('loading')
+    setError(null)
+    const supabase = createClient()
+    const { error: rpcError } = await supabase.rpc(
+      'change_deal_stage_with_activity',
+      {
+        p_deal_id: deal.id,
+        p_from_stage: deal.stage,
+        p_to_stage: next.value,
+      }
+    )
+    if (rpcError) {
+      setError(rpcError.message)
+      setState('error')
+      return
     }
+    setState('idle')
+    await fetchDeal()
+    await fetchActivities()
+    router.refresh()
   }
 
   async function onDelete() {
@@ -132,6 +340,8 @@ export function PitchDetailModal({
     setState('loading')
     setError(null)
     const supabase = createClient()
+    // Direct DELETE cascades to deals + activities via FK ON DELETE CASCADE.
+    // RLS gates ownership.
     const { error: deleteError } = await supabase
       .from('pitches')
       .delete()
@@ -145,93 +355,178 @@ export function PitchDetailModal({
     router.refresh()
   }
 
-  const next = nextStage(draft.pipeline_stage)
-
   return (
-    <div className="pitch-modal-overlay" onClick={onClose}>
-      <div className="pitch-modal" onClick={(e) => e.stopPropagation()}>
-        <header className="pitch-modal-head">
-          <span className="kicker">
-            Pitch detail · {pitch.brand_name ?? 'Untitled'} · Received{' '}
-            {formatFullDate(pitch.created_at)}
-          </span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="pitch-modal-close"
-            aria-label="Close"
-          >
-            Close <span className="x">×</span>
-          </button>
-        </header>
+    <>
+      <div className="pitch-modal-overlay" onClick={onClose}>
+        <div
+          className="pitch-modal"
+          data-tab={activeTab}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <header className="pitch-modal-head">
+            <div className="pitch-modal-head-l">
+              <span
+                className={
+                  'pitch-modal-dirchip' +
+                  (pitch.direction === 'outbound' ? ' is-outbound' : '')
+                }
+                aria-label={`Direction: ${pitch.direction}`}
+              >
+                <span className="pitch-modal-dirchip-arrow" aria-hidden>
+                  {pitch.direction === 'outbound' ? '↗' : '↘'}
+                </span>
+                {pitch.direction === 'outbound'
+                  ? 'Pitch to brand'
+                  : 'Pitch from brand'}
+              </span>
+              <span className="pitch-modal-band-when">
+                {pitch.direction === 'outbound' ? 'Sent' : 'Received'}{' '}
+                {formatFullDate(pitch.created_at)}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="pitch-modal-close"
+              aria-label="Close"
+            >
+              Close <span className="x">×</span>
+            </button>
+          </header>
 
-        {mode === 'read' ? (
-          <ReadView pitch={pitch} draft={draft} setDraft={setDraft} />
-        ) : (
-          <EditView draft={draft} update={update} onSave={onSave} />
-        )}
 
-        <footer className="pitch-modal-foot">
-          <button
-            type="button"
-            onClick={onDelete}
-            disabled={state === 'loading'}
-            className="pitch-modal-delete"
-          >
-            Delete pitch
-          </button>
-          <div className="pitch-modal-actions">
-            {error && <p className="pitch-modal-error">{error}</p>}
-            {mode === 'read' ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setMode('edit')}
-                  className="btn-outline"
-                >
-                  Edit details
-                </button>
-                {next && (
+          {deal === undefined ? (
+            // Hold the body + footer until the deal lookup resolves so the
+            // pipeline stage row doesn't pop in after the rest. Activities
+            // load in the same `Promise.all`, so this gate covers both.
+            <div className="pitch-modal-loading" role="status" aria-live="polite">
+              <Spinner className="h-6 w-6" />
+              <span className="sr-only">Loading pitch detail…</span>
+            </div>
+          ) : (
+            <>
+              {mode === 'read' ? (
+                <ReadView
+                  pitch={pitch}
+                  draft={draft}
+                  setDraft={setDraft}
+                  deal={deal}
+                  activities={activities}
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  onNoteBlur={persistUserNotesOnBlur}
+                  onStartTracking={() => setDealEditOpen(true)}
+                  onEditDeal={() => setDealEditOpen(true)}
+                />
+              ) : (
+                <EditView draft={draft} update={update} onSave={onSave} />
+              )}
+
+              <footer className="pitch-modal-foot">
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={state === 'loading'}
+              className="pitch-modal-delete"
+            >
+              Delete pitch
+            </button>
+            <div className="pitch-modal-actions">
+              {error && <p className="pitch-modal-error">{error}</p>}
+              {mode === 'read' ? (
+                <>
                   <button
                     type="button"
-                    onClick={onAdvanceStage}
+                    onClick={() => setMode('edit')}
+                    className="pdetail-edit"
+                  >
+                    Edit details
+                  </button>
+                  {deal === null && (
+                    <button
+                      type="button"
+                      onClick={() => setDealEditOpen(true)}
+                      className="pdetail-primary"
+                    >
+                      Start tracking deal{' '}
+                      <span className="arr" aria-hidden>
+                        →
+                      </span>
+                    </button>
+                  )}
+                  {deal &&
+                    (() => {
+                      const next = nextPipelineStage(deal.stage)
+                      return next ? (
+                        <button
+                          type="button"
+                          onClick={onAdvanceStage}
+                          disabled={state === 'loading'}
+                          className="pdetail-primary"
+                        >
+                          {state === 'loading' && (
+                            <Spinner className="h-4 w-4" />
+                          )}
+                          Move to {next.label}{' '}
+                          <span className="arr" aria-hidden>
+                            →
+                          </span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          className="pdetail-primary"
+                        >
+                          Final stage
+                        </button>
+                      )
+                    })()}
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraft(pitch)
+                      setMode('read')
+                      setError(null)
+                    }}
+                    className="btn-outline"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSave()}
                     disabled={state === 'loading'}
                     className="btn-pill"
                   >
                     {state === 'loading' && <Spinner className="h-4 w-4" />}
-                    Move to {next.label}{' '}
-                    <span className="arrow">→</span>
+                    {state === 'loading' ? 'Saving…' : 'Save changes'}
                   </button>
-                )}
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDraft(pitch)
-                    setMode('read')
-                    setError(null)
-                  }}
-                  className="btn-outline"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onSave()}
-                  disabled={state === 'loading'}
-                  className="btn-pill"
-                >
-                  {state === 'loading' && <Spinner className="h-4 w-4" />}
-                  {state === 'loading' ? 'Saving…' : 'Save changes'}
-                </button>
-              </>
-            )}
-          </div>
-        </footer>
+                </>
+              )}
+            </div>
+          </footer>
+            </>
+          )}
+        </div>
       </div>
-    </div>
+
+      {dealEditOpen && (
+        <DealEditModal
+          mode={deal ? 'edit' : 'create'}
+          deal={deal ?? startTrackingDraft}
+          onClose={() => setDealEditOpen(false)}
+          onSaved={() => {
+            fetchDeal()
+            fetchActivities()
+            router.refresh()
+          }}
+        />
+      )}
+    </>
   )
 }
 
@@ -239,145 +534,307 @@ function ReadView({
   pitch,
   draft,
   setDraft,
+  deal,
+  activities,
+  activeTab,
+  setActiveTab,
+  onNoteBlur,
+  onStartTracking,
+  onEditDeal,
 }: {
   pitch: Pitch
   draft: Pitch
   setDraft: (p: Pitch) => void
+  deal: Deal | null | undefined
+  activities: Activity[]
+  activeTab: Tab
+  setActiveTab: (t: Tab) => void
+  onNoteBlur: () => void
+  onStartTracking: () => void
+  onEditDeal: () => void
 }) {
   const deadlineParts = formatDeadline(pitch.deadline)
-  const currentStage = draft.pipeline_stage
+  const isOutbound = pitch.direction === 'outbound'
 
   return (
     <div className="pitch-read">
+      {/* Hero stays outside any pane so the brand H1 is always visible — on
+          mobile, switching between Pitch / Deal / Activity tabs preserves
+          this as context. The pipeline stage row sits directly below as
+          a status header (also pane-agnostic). */}
       <div className="pitch-hero">
         <h1 className="pitch-hero-h1">
           {(pitch.brand_name ?? 'Untitled pitch').toUpperCase()}
           <span className="pitch-hero-dot">.</span>
         </h1>
-        {/* HARDCODED hero sub-line — commented out for smoke / launch.
-            Restore when FR-3 (raw original view) and follow-up FRs for
-            industry / channel land. Touch status is derivable from
-            pitch_count and can come back independently.
-        <p className="pitch-hero-sub">
-          {HARDCODED.touchStatus} ·{' '}
-          {HARDCODED.industry} ·{' '}
-          Source: {HARDCODED.channel} · Captured {formatFullDate(pitch.created_at)}
-        </p>
-        */}
       </div>
 
-      <div className="pitch-section">
-        <span className="kicker">Pipeline stage</span>
-        <div className="pitch-stage-row">
-          {STAGES.map((s) => {
-            const active = currentStage === s.value
-            return (
-              <span
-                key={s.value}
-                className={`pitch-stage-chip ${s.variant}${active ? ' active' : ''}`}
-                aria-current={active ? 'true' : undefined}
-              >
-                <span className="dot" />
-                {s.label}
-              </span>
-            )
-          })}
-        </div>
-      </div>
-
-      <div className="pitch-grid">
-        <Cell label="Sender">
-          <strong className="pitch-cell-name">{pitch.sender_name ?? '—'}</strong>
-          {/* HARDCODED — sender email not extracted; restore when FR for
-              email-extraction lands.
-          <span className="muted">{HARDCODED.senderEmail}</span>
-          */}
-        </Cell>
-        <Cell label="Budget">
-          {pitch.budget_amount != null ? (
-            <strong>
-              {formatCurrencyAmount(
-                pitch.budget_currency ?? '',
-                pitch.budget_amount
-              )}
-              {pitch.budget_currency && <sup>{pitch.budget_currency}</sup>}
-            </strong>
-          ) : (
-            <strong>—</strong>
-          )}
-          {pitch.budget_notes && (
-            <span className="muted">+ {pitch.budget_notes}</span>
-          )}
-        </Cell>
-        <Cell label="Deadline">
-          <strong>{deadlineParts.display}</strong>
-          {deadlineParts.relative && (
-            <span className="muted">{deadlineParts.relative}</span>
-          )}
-        </Cell>
-        <Cell label="Category">
-          <strong className="pitch-cell-name">
-            {CATEGORY_LABEL[pitch.category]}
-          </strong>
-          {/* HARDCODED — category sub-tag not in schema; restore when scope
-              decision lands on whether/how to capture this.
-          <span className="muted">{HARDCODED.categorySubTag}</span>
-          */}
-        </Cell>
-      </div>
-
-      {pitch.deliverables.length > 0 && (
-        <div className="pitch-section">
-          <span className="kicker">
-            Deliverables · {pitch.deliverables.length}
-          </span>
-          <ol className="pitch-deliverables">
-            {pitch.deliverables.map((d, i) => (
-              <li key={i}>
-                <span className="num">{String(i + 1).padStart(2, '0')}</span>
-                <span>{d}</span>
-              </li>
-            ))}
-          </ol>
+      {deal && deal.stage !== 'rejected' && (
+        <div className="pitch-modal-stage">
+          <span className="pitch-modal-stage-l">Pipeline stage</span>
+          <div className="pitch-modal-stages">
+            {STAGE_PROGRESSION.map((s) => {
+              const variant = stageProgressionState(deal.stage, s.value)
+              return (
+                <span
+                  key={s.value}
+                  className={`pitch-modal-stage-btn${
+                    variant === 'current'
+                      ? ' is-current'
+                      : variant === 'past'
+                        ? ' is-past'
+                        : ''
+                  }`}
+                >
+                  {s.label}
+                </span>
+              )
+            })}
+          </div>
         </div>
       )}
 
-      {pitch.ai_summary && (
-        <div className="pitch-section">
-          <span className="kicker">AI summary</span>
-          <blockquote className="pitch-summary">{pitch.ai_summary}</blockquote>
-        </div>
-      )}
-
-      <div className="pitch-section">
-        <span className="kicker">Your notes</span>
-        <textarea
-          className="pitch-notes"
-          value={draft.user_notes ?? ''}
-          onChange={(e) => setDraft({ ...draft, user_notes: e.target.value })}
-          placeholder="Personal notes, follow-up reminders, negotiation context…"
-          rows={3}
-        />
-      </div>
-
-      {/* HARDCODED source row — entire block commented out for smoke / launch.
-          Subject + from-email require a scope decision (not in schema today).
-          The "View original" button will be wired to raw_pitch_text under FR-3
-          (raw original sub-view); restore the row then.
-      <div className="pitch-source">
-        <div className="pitch-source-meta">
-          <span className="muted">Source</span>{' '}
-          <strong>&ldquo;{HARDCODED.sourceSubject}&rdquo;</strong>{' '}
-          <span className="muted">·</span>{' '}
-          <span>from {HARDCODED.sourceFromEmail}</span>{' '}
-          <span className="muted">·</span>{' '}
-          <span>{formatFullDate(pitch.created_at)}</span>
-        </div>
-        <button type="button" className="pitch-source-link" disabled>
-          View original <span className="arrow">↗</span>
+      <nav
+        className="pdetail-tabs"
+        role="tablist"
+        aria-label="Pitch detail sections"
+      >
+        <button
+          type="button"
+          role="tab"
+          onClick={() => setActiveTab('pitch')}
+          className={
+            'pdetail-tab-btn' + (activeTab === 'pitch' ? ' is-active' : '')
+          }
+          aria-selected={activeTab === 'pitch'}
+        >
+          Pitch
         </button>
+        <button
+          type="button"
+          role="tab"
+          onClick={() => setActiveTab('deal')}
+          className={
+            'pdetail-tab-btn' + (activeTab === 'deal' ? ' is-active' : '')
+          }
+          aria-selected={activeTab === 'deal'}
+        >
+          Deal
+        </button>
+        <button
+          type="button"
+          role="tab"
+          onClick={() => setActiveTab('activity')}
+          className={
+            'pdetail-tab-btn' + (activeTab === 'activity' ? ' is-active' : '')
+          }
+          aria-selected={activeTab === 'activity'}
+        >
+          Activity
+          {activities.length > 0 && (
+            <span className="pdetail-tab-n">{activities.length}</span>
+          )}
+        </button>
+      </nav>
+
+      <div className="pdetail-pane" data-pane="pitch">
+        <div className="pitch-grid">
+          {!isOutbound && (
+            <Cell label="Sender">
+              <strong className="pitch-cell-name">
+                {pitch.sender_name ?? '—'}
+              </strong>
+            </Cell>
+          )}
+          <Cell label={isOutbound ? 'Proposed budget' : 'Budget'}>
+            {pitch.budget_amount != null ? (
+              <strong>
+                {formatCurrencyAmount(
+                  pitch.budget_currency ?? '',
+                  pitch.budget_amount
+                )}
+                {pitch.budget_currency && <sup>{pitch.budget_currency}</sup>}
+              </strong>
+            ) : (
+              <strong>—</strong>
+            )}
+            {pitch.budget_notes && (
+              <span className="muted">+ {pitch.budget_notes}</span>
+            )}
+          </Cell>
+          <Cell label="Deadline">
+            <strong>{deadlineParts.display}</strong>
+            {deadlineParts.relative && (
+              <span className="muted">{deadlineParts.relative}</span>
+            )}
+          </Cell>
+          {!isOutbound && (
+            <Cell label="Category">
+              <strong className="pitch-cell-name">
+                {CATEGORY_LABEL[pitch.category]}
+              </strong>
+            </Cell>
+          )}
+        </div>
       </div>
-      */}
+
+      <div className="pdetail-pane" data-pane="deal">
+        {deal === null && (
+          <div className="pitch-section is-deal">
+            <span className="kicker">Deal tracking</span>
+            <div className="pdetail-deal-empty">
+              <p className="pdetail-deal-empty-text">
+                <strong>No deal attached yet.</strong> Start tracking when
+                this pitch becomes a negotiation — budget, deliverables, and
+                scope evolve here without overwriting the original message.
+              </p>
+              <button
+                type="button"
+                onClick={onStartTracking}
+                className="btn-pill"
+              >
+                Start tracking deal <span className="arrow">→</span>
+              </button>
+            </div>
+          </div>
+        )}
+        {deal && (
+          <div className="pitch-section is-deal">
+            <div className="pdetail-deal-head">
+              <span className="kicker">Deal · current</span>
+              <button
+                type="button"
+                onClick={onEditDeal}
+                className="pdetail-deal-edit"
+              >
+                <span className="pdetail-deal-edit-icon" aria-hidden>
+                  ✎
+                </span>
+                Edit deal
+              </button>
+            </div>
+            <div className="pdetail-deal-grid">
+              <div className="pdetail-deal-cell">
+                <span className="pdetail-deal-cell-l">Stage</span>
+                <StageChip stage={deal.stage} />
+              </div>
+              <div className="pdetail-deal-cell">
+                <span className="pdetail-deal-cell-l">Current budget</span>
+                {deal.current_budget_amount != null ? (
+                  <span className="pdetail-deal-cell-v is-amount">
+                    {formatCurrencyAmount(
+                      deal.current_budget_currency ?? '',
+                      deal.current_budget_amount
+                    )}
+                    {deal.current_budget_currency && (
+                      <sup>{deal.current_budget_currency}</sup>
+                    )}
+                  </span>
+                ) : (
+                  <span className="pdetail-deal-cell-v is-empty">—</span>
+                )}
+              </div>
+              <div className="pdetail-deal-cell">
+                <span className="pdetail-deal-cell-l">
+                  Current {isOutbound ? 'offered' : 'requested'} deliverables
+                </span>
+                {deal.current_deliverables.length > 0 ? (
+                  <ul className="pdetail-deal-deliverables">
+                    {deal.current_deliverables.map((d, i) => (
+                      <li key={i}>{d}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="pdetail-deal-cell-v is-empty">—</span>
+                )}
+              </div>
+            </div>
+            {deal.current_scope_notes && (
+              <div className="pitch-deal-notes">
+                &ldquo;{deal.current_scope_notes}&rdquo;
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="pdetail-pane" data-pane="pitch">
+        {pitch.deliverables.length > 0 && (
+          <div className="pitch-section">
+            <span className="kicker">
+              {isOutbound ? 'Offered deliverables' : 'Deliverables'} ·{' '}
+              {pitch.deliverables.length}
+            </span>
+            <ol className="pitch-deliverables">
+              {pitch.deliverables.map((d, i) => (
+                <li key={i}>
+                  <span className="num">{String(i + 1).padStart(2, '0')}</span>
+                  <span>{d}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
+        {pitch.ai_summary && (
+          <div className="pitch-section">
+            <span className="kicker">AI summary</span>
+            <blockquote className="pitch-summary">
+              {pitch.ai_summary}
+            </blockquote>
+          </div>
+        )}
+
+        <div className="pitch-section">
+          <span className="kicker">Your notes</span>
+          <textarea
+            className="pitch-notes"
+            value={draft.user_notes ?? ''}
+            onChange={(e) =>
+              setDraft({ ...draft, user_notes: e.target.value || null })
+            }
+            onBlur={onNoteBlur}
+            placeholder="Personal notes, follow-up reminders, negotiation context…"
+            rows={3}
+          />
+        </div>
+      </div>
+
+      <div className="pdetail-pane" data-pane="activity">
+        {activities.length > 0 && (
+          <div className="pitch-section">
+            <span className="kicker">
+              Activity log · {activities.length}{' '}
+              {activities.length === 1 ? 'event' : 'events'}
+            </span>
+            <div className="timeline">
+              {activities.map((a) => {
+                const ev = formatActivityEvent(a)
+                const accentClass =
+                  ev.accent === 'accent'
+                    ? ' is-accent'
+                    : ev.accent === 'ink'
+                      ? ' is-ink'
+                      : ''
+                return (
+                  <div key={a.id} className={'tl-event' + accentClass}>
+                    <span className="tl-dot" aria-hidden />
+                    <div className="tl-body">
+                      <span className="tl-type">{ev.label}</span>
+                      {ev.payload && (
+                        <span className="tl-payload">{ev.payload}</span>
+                      )}
+                    </div>
+                    <span className="tl-when">
+                      {formatFullDate(a.created_at)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -400,45 +857,40 @@ function EditView({
   update: <K extends keyof Pitch>(key: K, value: Pitch[K]) => void
   onSave: (e?: FormEvent) => void
 }) {
+  const isOutbound = draft.direction === 'outbound'
+  // Local raw string for deliverables — see the matching comment in
+  // DealEditModal. A derived `array.join(', ')` controlled input would
+  // swallow user-typed spaces + trailing commas.
+  const [deliverablesInput, setDeliverablesInput] = useState(
+    draft.deliverables.join(', ')
+  )
   return (
-    <form
-      onSubmit={onSave}
-      className="pitch-edit"
-    >
-      <Field label="Pipeline stage">
-        <div className="flex flex-wrap gap-2 pt-1">
-          {STAGES.map((s) => {
-            const active = draft.pipeline_stage === s.value
-            return (
-              <button
-                key={s.value}
-                type="button"
-                onClick={() => update('pipeline_stage', s.value)}
-                className={`stage ${s.variant} cursor-pointer transition-opacity ${active ? '' : 'opacity-40 hover:opacity-70'}`}
-                aria-pressed={active}
-              >
-                {s.label}
-              </button>
-            )
-          })}
-        </div>
-      </Field>
+    <form onSubmit={onSave} className="pitch-edit">
       <Field label="Brand">
         <TextInput
           value={draft.brand_name ?? ''}
           onChange={(v) => update('brand_name', v || null)}
         />
       </Field>
-      <Field label="Sender">
+      {!isOutbound && (
+        <Field label="Sender">
+          <TextInput
+            value={draft.sender_name ?? ''}
+            onChange={(v) => update('sender_name', v || null)}
+          />
+        </Field>
+      )}
+      <Field
+        label={
+          isOutbound
+            ? 'Offered deliverables (comma-separated)'
+            : 'Deliverables (comma-separated)'
+        }
+      >
         <TextInput
-          value={draft.sender_name ?? ''}
-          onChange={(v) => update('sender_name', v || null)}
-        />
-      </Field>
-      <Field label="Deliverables (comma-separated)">
-        <TextInput
-          value={draft.deliverables.join(', ')}
-          onChange={(v) =>
+          value={deliverablesInput}
+          onChange={(v) => {
+            setDeliverablesInput(v)
             update(
               'deliverables',
               v
@@ -446,11 +898,11 @@ function EditView({
                 .map((s) => s.trim())
                 .filter(Boolean)
             )
-          }
+          }}
         />
       </Field>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Field label="Budget amount">
+        <Field label={isOutbound ? 'Proposed price' : 'Budget amount'}>
           <input
             type="number"
             step="0.01"
@@ -483,21 +935,23 @@ function EditView({
           onChange={(v) => update('deadline', v || null)}
         />
       </Field>
-      <Field label="Category">
-        <select
-          value={draft.category}
-          onChange={(e) =>
-            update('category', e.target.value as PitchCategory)
-          }
-          className="signin-input w-full"
-        >
-          {CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {CATEGORY_LABEL[c]}
-            </option>
-          ))}
-        </select>
-      </Field>
+      {!isOutbound && (
+        <Field label="Category">
+          <select
+            value={draft.category}
+            onChange={(e) =>
+              update('category', e.target.value as PitchCategory)
+            }
+            className="signin-input w-full"
+          >
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {CATEGORY_LABEL[c]}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
       <Field label="AI summary">
         <textarea
           rows={2}
@@ -549,15 +1003,6 @@ function TextInput({
       className="signin-input w-full"
     />
   )
-}
-
-function nextStage(
-  current: PipelineStage
-): { value: PipelineStage; label: string } | null {
-  const idx = STAGES.findIndex((s) => s.value === current)
-  if (idx === -1 || idx === STAGES.length - 1) return null
-  const n = STAGES[idx + 1]
-  return { value: n.value, label: n.label }
 }
 
 function formatDeadline(deadline: string | null): {
