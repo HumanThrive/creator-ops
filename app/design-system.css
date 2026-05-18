@@ -1429,9 +1429,11 @@
 }
 
 /* Stage chips — 5 variants per spec.
-   Maps to existing pipeline_stage values:
-   inbox / negotiating / confirmed / delivered_paid / not_a_pitch
-   (notpitch class name from design handoff = not_a_pitch in DB) */
+   Maps to deals.stage values (post-CR-2 Migration 1):
+   inbox / negotiating / confirmed / delivered / rejected.
+   The notpitch class is an additional override sourced from the pitch's
+   not_a_pitch tag (post-CR-2) — applies when a pitch is tagged not_a_pitch
+   and rendered in surfaces that show a stage chip. */
 .stage {
   display: inline-flex; align-items: center; gap: 6px;
   font-family: var(--mono);
@@ -3391,3 +3393,369 @@
 }
 .foot-meta a { transition: color 0.2s; }
 .foot-meta a:hover { color: var(--accent); }
+
+/* ════════════════════════════════════════════════════════════
+   CR-2 — multi-axis tag system
+   • Editor surface: ChipSelector (radio legitimacy + checkbox compensation)
+   • Display surface: TagBadges (read-only chips in receipts-grid Tags cell)
+   • Disabled state on compensation when legitimacy ≠ Valid
+   Lifted verbatim from
+   docs/design/design_handoff_supaspike_phase_a/crm/crm-styles.css L2465-2807.
+   ════════════════════════════════════════════════════════════ */
+
+/* ─────────── ChipSelector — editor (D1) ─────────── */
+
+.chip-selector {
+  display: flex; flex-direction: column;
+  gap: 10px;
+}
+.chip-selector + .chip-selector {
+  margin-top: 14px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.chip-selector-l {
+  font-family: var(--mono);
+  font-size: 10.5px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+}
+.chip-selector-l::before {
+  content: ""; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--accent);
+  flex: 0 0 auto;
+}
+.chip-selector-l .axis-kind {
+  font-family: var(--mono);
+  font-size: 9.5px; letter-spacing: 0.10em;
+  color: var(--ink-4);
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.chip-selector-l .axis-paused {
+  font-family: var(--mono);
+  font-size: 9.5px; letter-spacing: 0.10em;
+  color: var(--ink-4);
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border: 1px dashed var(--line-2);
+  border-radius: 999px;
+}
+.chip-selector-group {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+
+/* Single chip — unified outlined-only pattern. */
+.chip-tag {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono);
+  font-size: 10.5px; font-weight: 500;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  padding: 6px 12px 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--paper);
+  color: var(--ink-3);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s, color 0.15s, transform 0.12s;
+}
+/* Default leading marker — empty circle (radio) */
+.chip-tag::before {
+  content: ""; width: 6px; height: 6px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid var(--ink-4);
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  transition: background 0.15s, border-color 0.15s;
+}
+/* Checkbox shape — small rounded square instead of circle */
+.chip-tag.is-checkbox::before {
+  border-radius: 1.5px;
+}
+.chip-tag:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+  transform: translateY(-0.5px);
+}
+.chip-tag:hover::before { border-color: var(--ink); }
+
+/* Selected — both radio and checkbox use accent-filled marker.
+   Border + text shift to ink to call out the active selection. */
+.chip-tag.is-selected {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.chip-tag.is-selected::before {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Disabled group (compensation when legitimacy ≠ Valid).
+   Underlying selection state is PRESERVED — the chips fade rather than
+   reset. Toggling legitimacy back to Valid re-enables them as-was. */
+.chip-selector.is-disabled .chip-tag {
+  cursor: not-allowed;
+  pointer-events: none;
+  opacity: 0.45;
+  color: var(--ink-4);
+  border-color: var(--line);
+}
+.chip-selector.is-disabled .chip-tag.is-selected {
+  opacity: 0.7;
+  color: var(--ink-3);
+  border-color: var(--line-2);
+}
+.chip-selector.is-disabled .chip-tag.is-selected::before {
+  background: var(--ink-3);
+  border-color: var(--ink-3);
+}
+.chip-selector.is-disabled .chip-selector-l {
+  color: var(--ink-4);
+}
+.chip-selector.is-disabled .chip-selector-l::before {
+  background: var(--ink-4);
+}
+
+/* ─────────── TagBadges — display (D2) ─────────── */
+
+.tag-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.tag-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono);
+  font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  padding: 3px 9px 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--paper);
+  color: var(--ink-2);
+  white-space: nowrap;
+  cursor: default;
+}
+.tag-badge::before {
+  content: ""; width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--ink-4);
+  flex: 0 0 auto;
+}
+/* Legitimacy variants */
+.tag-badge.is-legit::before { background: var(--ink-4); }
+.tag-badge.is-low { color: var(--ink-2); }
+.tag-badge.is-low::before { background: var(--accent); }
+.tag-badge.is-spam { border-color: var(--accent); color: var(--accent); }
+.tag-badge.is-spam::before { background: var(--accent); }
+.tag-badge.is-unclear { border-style: dashed; color: var(--ink-3); }
+.tag-badge.is-unclear::before { background: var(--ink-3); }
+.tag-badge.is-notpitch { color: var(--ink-4); }
+.tag-badge.is-notpitch::before { background: var(--ink-4); }
+/* Compensation variants */
+.tag-badge.is-cash::before { background: var(--ink-2); }
+.tag-badge.is-gift::before { background: var(--ink-4); }
+.tag-badge.is-collab::before {
+  background: transparent;
+  border: 1px solid var(--ink-3);
+  width: 5px; height: 5px;
+  box-sizing: border-box;
+}
+.tag-badge.is-unspec { border-style: dashed; color: var(--ink-4); }
+.tag-badge.is-unspec::before {
+  background: transparent;
+  border: 1px solid var(--ink-4);
+  width: 5px; height: 5px;
+  box-sizing: border-box;
+}
+
+/* ─────────── Receipts-grid Tags cell (D3) ─────────── */
+
+.pdetail-cell.is-tags { gap: 10px; }
+.pdetail-cell.is-tags .pdetail-cell-l { margin-bottom: 0; }
+.pdetail-cell.is-tags .tag-badges {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  align-items: flex-start;
+}
+.pdetail-cell.is-tags .pdetail-cell-sub.dim {
+  color: var(--ink-4);
+  font-style: italic;
+}
+
+/* ─────────── Edit-tags section (D4) ─────────── */
+
+/* Slide-down animation wrapper. Modern CSS trick: grid-template-rows 0fr → 1fr
+   on the slot + overflow:hidden + min-height:0 on the inner div. The inner
+   div's natural height drives the animation without JS measurement or
+   flash-of-natural-height. Opacity fades 0 → 1 in tandem. */
+.pdetail-edit-tags-slot {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 250ms ease-out, opacity 250ms ease-out;
+}
+.pdetail-edit-tags-slot.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.pdetail-edit-tags-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Pencil affordance on the Tags cell (top-right). 12px SVG in 16×16 hit
+   target. Color follows --ink-3 → --ink on hover via currentColor. */
+.pdetail-cell.is-tags { position: relative; }
+.pdetail-cell.is-tags .pdetail-cell-edit-trigger {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.pdetail-cell.is-tags .pdetail-cell-edit-trigger:hover { color: var(--ink); }
+
+/* Chevron collapse trigger inside the edit-tags head row. */
+.pdetail-edit-tags-collapse {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.pdetail-edit-tags-collapse:hover { color: var(--ink); }
+
+.pdetail-edit-tags {
+  padding: 24px 32px 26px;
+  border-bottom: 1px solid var(--line-board);
+  background: var(--paper);
+  display: flex; flex-direction: column; gap: 14px;
+}
+.pdetail-edit-tags-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 16px;
+}
+.pdetail-edit-tags-l {
+  font-family: var(--mono);
+  font-size: 10.5px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.pdetail-edit-tags-l::before {
+  content: ""; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--accent);
+}
+.pdetail-edit-tags-meta {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.10em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+.pdetail-edit-tags-body {
+  display: flex; flex-direction: column;
+  gap: 0;
+}
+
+/* ─────────── AddPitch chip-selector slot (D1 in AddPitchModal) ─────────── */
+
+/* Shipped naming convention is `.add-modal-*` (design handoff used
+   `.addpitch-*`); renamed here to match the actual JSX classes in
+   `components/AddPitchModal.tsx`. */
+.add-modal-field.is-chips {
+  grid-column: 1 / -1;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 16px 18px 18px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.add-modal-field.is-chips .add-modal-field-kicker {
+  margin-bottom: 0;
+}
+.add-modal-field.is-chips .chip-selector + .chip-selector {
+  margin-top: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+/* ─────────── Mobile — chip selector tweaks ─────────── */
+
+@container app (max-width: 720px) {
+  .chip-selector-group { gap: 6px; }
+  .chip-tag {
+    font-size: 10px;
+    padding: 6px 11px 6px 9px;
+    letter-spacing: 0.08em;
+  }
+  .chip-tag::before { width: 5px; height: 5px; }
+
+  .pdetail-edit-tags { padding: 20px 22px 22px; }
+  .pdetail-edit-tags-head { flex-direction: column; align-items: flex-start; gap: 4px; }
+}
+
+/* ════════════════════════════════════════════════════════════
+   CR-2 · PitchCard right-slot meta (AC4.8 — Option A locked)
+   Mono microcopy in the card-amt slot for non-cash and mixed deals.
+   ════════════════════════════════════════════════════════════ */
+
+.comp-meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.comp-meta-suffix {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding-left: 6px;
+  margin-left: 4px;
+  border-left: 1px solid var(--line-2);
+  white-space: nowrap;
+}
+
+/* ════════════════════════════════════════════════════════════
+   CR-2 · AddPitchModal textarea — slate ground after extraction
+   The pre-extract textarea uses the default modal background. Once an
+   extraction lands, the textarea becomes a read-mostly reference (the
+   user's eye moves down to the field grid) — the slate ground signals
+   that state shift without dimming or graying-out the content.
+   ════════════════════════════════════════════════════════════ */
+
+.add-modal-textarea.is-extracted {
+  background: var(--paper-board);
+  border-color: var(--line-board);
+}
+.add-modal-textarea.is-extracted:focus { background: var(--paper); }

@@ -29,14 +29,21 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
   // Per FR-4 S5 (AC5.1–AC5.3): fetch the deal + activity log for each pitch in
   // this brand's set so the timeline renders direction-aware rows + current
   // deal state + per-pitch activity log subsection.
+  // CR-2: also fetch entity_tags (joined to tags.slug) per pitch — drives the
+  // BHT not-a-pitch predicate that replaces the pre-CR-2 `pitch.category` read.
   const pitchIds = detail.pitches.map((p) => p.id)
-  const [dealsResult, activitiesResult] = await Promise.all([
+  const [dealsResult, activitiesResult, tagsResult] = await Promise.all([
     supabase.from('deals').select('*').in('pitch_id', pitchIds),
     supabase
       .from('activities')
       .select('*')
       .in('pitch_id', pitchIds)
       .order('created_at', { ascending: true }),
+    supabase
+      .from('entity_tags')
+      .select('ref_id, tags(slug)')
+      .eq('ref_type', 'pitch')
+      .in('ref_id', pitchIds),
   ])
 
   const dealsByPitchId: Record<string, Deal | undefined> = {}
@@ -51,6 +58,17 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
     const bucket = activitiesByPitchId[activity.pitch_id] ?? []
     bucket.push(activity)
     activitiesByPitchId[activity.pitch_id] = bucket
+  }
+
+  const tagsByPitchId: Record<string, string[]> = {}
+  for (const row of tagsResult.data ?? []) {
+    const refId = (row as { ref_id: string }).ref_id
+    const tagRel = (row as { tags: { slug: string } | { slug: string }[] | null }).tags
+    if (!tagRel) continue
+    const slugs = Array.isArray(tagRel) ? tagRel.map((t) => t.slug) : [tagRel.slug]
+    const bucket = tagsByPitchId[refId] ?? []
+    bucket.push(...slugs)
+    tagsByPitchId[refId] = bucket
   }
 
   const repeatLabel = detail.pitchCount === 1 ? '1st touch' : 'Repeat customer'
@@ -112,6 +130,7 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
         pitches={detail.pitches}
         dealsByPitchId={dealsByPitchId}
         activitiesByPitchId={activitiesByPitchId}
+        tagsByPitchId={tagsByPitchId}
       />
     </div>
   )

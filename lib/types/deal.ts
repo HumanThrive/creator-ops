@@ -2,7 +2,7 @@ export type DealStage =
   | 'inbox'
   | 'negotiating'
   | 'confirmed'
-  | 'delivered_paid'
+  | 'delivered'
   | 'rejected'
 
 export interface Deal {

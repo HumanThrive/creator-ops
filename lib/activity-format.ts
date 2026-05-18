@@ -5,7 +5,7 @@ const STAGE_LABELS: Record<DealStage, string> = {
   inbox: 'Inbox',
   negotiating: 'Negotiating',
   confirmed: 'Confirmed',
-  delivered_paid: 'Delivered & paid',
+  delivered: 'Delivered',
   rejected: 'Rejected',
 }
 

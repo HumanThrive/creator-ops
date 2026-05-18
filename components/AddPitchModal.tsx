@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type {
   ExtractedPitch,
-  PitchCategory,
   PitchDirection,
 } from '@/lib/types/pitch'
+import { ChipSelector, type ChipSelectorOption } from './ChipSelector'
 import { Spinner } from './Spinner'
 
 function friendlyExtractError(code: string | undefined): string {
@@ -21,6 +21,8 @@ function friendlyExtractError(code: string | undefined): string {
     case 'extraction_invalid_response':
     case 'extraction_parse_failed':
       return "Couldn't read the AI response. Try a different paste or rephrase."
+    case 'tag_list_unavailable':
+      return 'Tag list temporarily unavailable. Try again in a moment.'
     default:
       if (code?.startsWith('anthropic_')) {
         return 'AI service is having trouble. Please try again in a moment.'
@@ -29,22 +31,35 @@ function friendlyExtractError(code: string | undefined): string {
   }
 }
 
-const CATEGORIES: PitchCategory[] = [
-  'legit',
-  'gifting_only',
-  'low_quality',
-  'spam_or_scam',
-  'unclear',
-  'not_a_pitch',
+// CR-2 tag axes — mirrors `tags WHERE scope='pitch'` seed from Migration 1.
+// Display labels match `docs/design/.../screens.jsx` LEGIT_OPTIONS / COMP_OPTIONS.
+const LEGITIMACY_OPTIONS: ChipSelectorOption[] = [
+  { id: 'valid', label: 'Valid' },
+  { id: 'low_quality', label: 'Low quality' },
+  { id: 'spam_or_scam', label: 'Spam / Scam' },
+  { id: 'unclear', label: 'Unclear' },
+  { id: 'not_a_pitch', label: 'Not a pitch' },
 ]
+const COMPENSATION_OPTIONS: ChipSelectorOption[] = [
+  { id: 'cash', label: 'Cash' },
+  { id: 'gifting', label: 'Gifting' },
+  { id: 'collaboration', label: 'Collab' },
+  { id: 'unspecified', label: 'Unspecified' },
+]
+const LEGITIMACY_SLUGS = new Set(LEGITIMACY_OPTIONS.map((o) => o.id))
+const COMPENSATION_SLUGS = new Set(COMPENSATION_OPTIONS.map((o) => o.id))
 
-const CATEGORY_LABEL: Record<PitchCategory, string> = {
-  legit: 'Legit',
-  gifting_only: 'Gifting only',
-  low_quality: 'Low quality',
-  spam_or_scam: 'Spam / scam',
-  unclear: 'Unclear',
-  not_a_pitch: 'Not a pitch',
+function splitTagsByAxis(tags: string[]): {
+  legitimacy: string | null
+  compensation: string[]
+} {
+  let legitimacy: string | null = null
+  const compensation: string[] = []
+  for (const t of tags) {
+    if (LEGITIMACY_SLUGS.has(t)) legitimacy = t
+    else if (COMPENSATION_SLUGS.has(t)) compensation.push(t)
+  }
+  return { legitimacy, compensation }
 }
 
 const COPY = {
@@ -95,12 +110,12 @@ export function AddPitchModal({
   const [extracted, setExtracted] = useState<ExtractedPitch | null>(null)
   const [extractDurationMs, setExtractDurationMs] = useState<number | null>(null)
   const [userNotes, setUserNotes] = useState('')
-  // Local raw string for the deliverables `;`-separated input. Pairing this
-  // with `extracted.deliverables` (parsed array) lets the user type spaces
-  // and partial separators naturally — a controlled input derived from
-  // `array.join('; ')` would strip trailing whitespace + collapse in-progress
-  // delimiters on every keystroke, making the field unusable.
   const [deliverablesInput, setDeliverablesInput] = useState('')
+  // CR-2 tag state — pre-extract: null/empty. Post-extract: populated from
+  // extracted.tags via splitTagsByAxis. User-editable via ChipSelectors.
+  // Compensation state is PRESERVED across legitimacy flips per AC4.5.
+  const [legitimacy, setLegitimacy] = useState<string | null>(null)
+  const [compensation, setCompensation] = useState<string[]>([])
 
   const copy = COPY[direction]
 
@@ -130,7 +145,11 @@ export function AddPitchModal({
       setExtractDurationMs(performance.now() - start)
       const data = json.data as ExtractedPitch
       setExtracted(data)
-      setDeliverablesInput(data.deliverables.join('; '))
+      setDeliverablesInput(data.deliverables.join(', '))
+      const aiTags = Array.isArray(data.tags) ? data.tags : []
+      const { legitimacy: legAi, compensation: compAi } = splitTagsByAxis(aiTags)
+      setLegitimacy(legAi)
+      setCompensation(compAi)
       setState('idle')
     } catch (err) {
       setError(
@@ -150,12 +169,24 @@ export function AddPitchModal({
 
     const supabase = createClient()
     // Direction invariants enforced at save-time regardless of toggle state:
-    // outbound → sender_name=null, category='legit'. Underlying extracted state
-    // is preserved so toggling back to inbound recovers values.
+    // outbound → sender_name=null. Underlying extracted sender_name preserved
+    // so toggling back to inbound recovers values.
     const senderName =
       direction === 'outbound' ? null : extracted.sender_name
-    const category: PitchCategory =
-      direction === 'outbound' ? 'legit' : extracted.category
+
+    // Compose tag-set per CR-2 AC1.4 + AC1.6:
+    //   - Outbound: legitimacy is server-side always 'valid' (per AC1.4);
+    //     prepend 'valid' client-side as the defense-in-depth save guard.
+    //   - Inbound: legitimacy is whatever user/AI picked. Compensation tags
+    //     are saved ONLY when legitimacy === 'valid' (per AC1.6 axis rule:
+    //     compensation tags only meaningful for real partnership offers).
+    let tagSlugs: string[]
+    if (direction === 'outbound') {
+      tagSlugs = ['valid', ...compensation]
+    } else {
+      const legit = legitimacy ?? 'unclear'
+      tagSlugs = legit === 'valid' ? [legit, ...compensation] : [legit]
+    }
 
     const { data: pitchData, error: rpcError } = await supabase.rpc(
       'save_pitch_with_activity',
@@ -169,7 +200,7 @@ export function AddPitchModal({
         p_budget_currency: extracted.budget.currency,
         p_budget_notes: extracted.budget.notes,
         p_deadline: extracted.deadline,
-        p_category: category,
+        p_tag_slugs: tagSlugs,
         p_ai_summary: extracted.summary,
       }
     )
@@ -182,36 +213,13 @@ export function AddPitchModal({
 
     const pitchResult = pitchData as { pitch_id: string } | null
 
-    // S2 auto-create deal — skip-list per AC2.1
-    const shouldAutoCreateDeal =
-      direction === 'outbound' ||
-      (category !== 'spam_or_scam' && category !== 'not_a_pitch')
+    // Auto-deal-create skip-list is now folded into save_pitch_with_activity
+    // RPC per AC4.3 — no separate create_deal_with_activity call needed.
 
-    if (shouldAutoCreateDeal && pitchResult?.pitch_id) {
-      const { error: dealError } = await supabase.rpc(
-        'create_deal_with_activity',
-        {
-          p_pitch_id: pitchResult.pitch_id,
-          p_stage: 'inbox',
-          p_current_budget_amount: extracted.budget.amount,
-          p_current_budget_currency: extracted.budget.currency,
-          p_current_deliverables: extracted.deliverables,
-          p_current_scope_notes: null,
-        }
-      )
-      if (dealError) {
-        console.error(
-          '[AddPitchModal] deal auto-create failed:',
-          dealError.message
-        )
-      }
-    }
-
-    // Optional notes — save_pitch_with_activity RPC doesn't accept p_user_notes
-    // in its current signature. Chain update_pitch_with_activity if user typed
-    // notes. Creates an extra pitch_updated activity row (accurate audit: notes
-    // were added at create-time as a separate action). Future iteration: extend
-    // the save RPC to accept user_notes directly and drop this chain.
+    // Optional notes — chain update_pitch_with_activity with the same tag set.
+    // Creates an extra pitch_updated activity row (accurate audit: notes added
+    // at create-time as a separate action). Future iteration: extend save RPC
+    // to accept user_notes directly and drop this chain.
     const trimmedNotes = userNotes.trim()
     if (trimmedNotes && pitchResult?.pitch_id) {
       const { error: notesError } = await supabase.rpc(
@@ -225,7 +233,7 @@ export function AddPitchModal({
           p_budget_currency: extracted.budget.currency,
           p_budget_notes: extracted.budget.notes,
           p_deadline: extracted.deadline,
-          p_category: category,
+          p_tag_slugs: tagSlugs,
           p_ai_summary: extracted.summary,
           p_user_notes: trimmedNotes,
           p_field_diffs: { user_notes: [null, trimmedNotes] },
@@ -266,7 +274,8 @@ export function AddPitchModal({
   const hasPitchText = pitchText.trim().length > 0
   const canSave = hasExtracted && state !== 'loading'
 
-  // Count of non-empty fields for the status bar metric ("N fields filled")
+  // Status bar metric — "N fields filled". Includes a "tags" slot for inbound
+  // (legitimacy chosen) but not for outbound (legitimacy server-injected).
   const filledCount = extracted
     ? [
         extracted.brand_name,
@@ -274,9 +283,14 @@ export function AddPitchModal({
         extracted.deliverables.length > 0 ? 'x' : null,
         extracted.budget.amount,
         extracted.deadline,
-        direction === 'inbound' ? extracted.category : undefined,
+        direction === 'inbound' ? (legitimacy ? 'x' : null) : undefined,
       ].filter((v) => v !== null && v !== undefined && v !== '').length
     : 0
+
+  // Compensation is visually disabled when legitimacy is set to a non-valid
+  // value (inbound only). Selection state preserved per AC4.5.
+  const compensationDisabled =
+    direction === 'inbound' && legitimacy !== null && legitimacy !== 'valid'
 
   return (
     <div className="pitch-modal-overlay" onClick={onClose}>
@@ -339,7 +353,9 @@ export function AddPitchModal({
               Paste the message
             </span>
             <textarea
-              className="add-modal-textarea"
+              className={
+                'add-modal-textarea' + (hasExtracted ? ' is-extracted' : '')
+              }
               value={pitchText}
               onChange={(e) => setPitchText(e.target.value)}
               rows={6}
@@ -349,7 +365,6 @@ export function AddPitchModal({
             />
           </div>
 
-          {/* Status bar between textarea and fields */}
           <StatusBar
             state={state}
             error={error}
@@ -361,7 +376,6 @@ export function AddPitchModal({
             onExtract={onExtract}
           />
 
-          {/* Field grid — appears below the status bar once extracted */}
           {hasExtracted && extracted && (
             <form onSubmit={onSave} className="add-modal-fields">
               <Field label="Brand">
@@ -438,7 +452,7 @@ export function AddPitchModal({
                     updateField(
                       'deliverables',
                       e.target.value
-                        .split(';')
+                        .split(',')
                         .map((s) => s.trim())
                         .filter(Boolean)
                     )
@@ -446,23 +460,32 @@ export function AddPitchModal({
                 />
               </Field>
 
-              {direction === 'inbound' && (
-                <Field label="Category">
-                  <select
-                    className="add-modal-field-input"
-                    value={extracted.category}
-                    onChange={(e) =>
-                      updateField('category', e.target.value as PitchCategory)
-                    }
-                  >
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {CATEGORY_LABEL[c]}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              )}
+              {/* CR-2 chip-selector slot — replaces the prior `Category` <select>.
+                  Renders inside the same fields grid as a full-width row.
+                  Outbound hides the legitimacy ChipSelector entirely per AC1.4. */}
+              <div className="add-modal-field is-chips">
+                <span className="add-modal-field-kicker">
+                  <span className="add-modal-kicker-dot" />
+                  Tags · multi-axis
+                </span>
+                {direction === 'inbound' && (
+                  <ChipSelector
+                    axis="Legitimacy"
+                    kind="radio"
+                    options={LEGITIMACY_OPTIONS}
+                    value={legitimacy}
+                    onChange={setLegitimacy}
+                  />
+                )}
+                <ChipSelector
+                  axis="Compensation"
+                  kind="checkbox"
+                  options={COMPENSATION_OPTIONS}
+                  value={compensation}
+                  onChange={setCompensation}
+                  disabled={compensationDisabled}
+                />
+              </div>
 
               <Field label="Notes (optional)">
                 <input
@@ -529,7 +552,6 @@ function StatusBar({
   helperEmpty,
   onExtract,
 }: StatusBarProps) {
-  // Loading state — extraction in flight
   if (state === 'loading' && !hasExtracted) {
     return (
       <div className="add-modal-status add-modal-status-loading">
@@ -541,7 +563,6 @@ function StatusBar({
     )
   }
 
-  // Error state
   if (state === 'error' && error && !hasExtracted) {
     return (
       <div className="add-modal-status add-modal-status-error">
@@ -559,7 +580,6 @@ function StatusBar({
     )
   }
 
-  // Success state — extracted
   if (hasExtracted) {
     const seconds =
       extractDurationMs !== null ? (extractDurationMs / 1000).toFixed(1) : '?'
@@ -576,7 +596,6 @@ function StatusBar({
     )
   }
 
-  // Empty state — has text but not extracted yet
   if (hasPitchText) {
     return (
       <div className="add-modal-status">
@@ -592,7 +611,6 @@ function StatusBar({
     )
   }
 
-  // Initial empty state
   return (
     <div className="add-modal-status">
       <span className="add-modal-status-l muted">{helperEmpty}</span>

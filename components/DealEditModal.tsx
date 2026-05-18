@@ -9,7 +9,7 @@ const STAGES: { value: DealStage; label: string; variant: string }[] = [
   { value: 'inbox', label: 'Inbox', variant: 'inbox' },
   { value: 'negotiating', label: 'Negotiating', variant: 'negotiating' },
   { value: 'confirmed', label: 'Confirmed', variant: 'confirmed' },
-  { value: 'delivered_paid', label: 'Delivered & paid', variant: 'delivered' },
+  { value: 'delivered', label: 'Delivered', variant: 'delivered' },
   { value: 'rejected', label: 'Rejected', variant: 'rejected' },
 ]
 

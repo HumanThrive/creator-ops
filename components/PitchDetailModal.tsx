@@ -9,32 +9,45 @@ import {
 } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Pitch, PitchCategory } from '@/lib/types/pitch'
+import type { Pitch } from '@/lib/types/pitch'
 import type { Deal, DealStage } from '@/lib/types/deal'
 import type { Activity } from '@/lib/types/activity'
 import { formatFullDate } from '@/lib/format'
 import { formatCurrencyAmount } from '@/lib/pitch-stats'
 import { formatActivityEvent } from '@/lib/activity-format'
+import { useEntityTags, type Tag } from '@/lib/hooks/useEntityTags'
 import { Spinner } from './Spinner'
 import { StageChip } from './StageChip'
 import { DealEditModal } from './DealEditModal'
+import { ChipSelector, type ChipSelectorOption } from './ChipSelector'
+import { TagBadges } from './TagBadges'
 
-const CATEGORIES: PitchCategory[] = [
-  'legit',
-  'gifting_only',
-  'low_quality',
-  'spam_or_scam',
-  'unclear',
-  'not_a_pitch',
+// CR-2 — mirrors `tags WHERE scope='pitch'` seed (Migration 1, 2026-05-17).
+const LEGITIMACY_OPTIONS: ChipSelectorOption[] = [
+  { id: 'valid', label: 'Valid' },
+  { id: 'low_quality', label: 'Low quality' },
+  { id: 'spam_or_scam', label: 'Spam / Scam' },
+  { id: 'unclear', label: 'Unclear' },
+  { id: 'not_a_pitch', label: 'Not a pitch' },
+]
+const COMPENSATION_OPTIONS: ChipSelectorOption[] = [
+  { id: 'cash', label: 'Cash' },
+  { id: 'gifting', label: 'Gifting' },
+  { id: 'collaboration', label: 'Collab' },
+  { id: 'unspecified', label: 'Unspecified' },
 ]
 
-const CATEGORY_LABEL: Record<PitchCategory, string> = {
-  legit: 'Legit',
-  gifting_only: 'Gifting only',
-  low_quality: 'Low quality',
-  spam_or_scam: 'Spam / scam',
-  unclear: 'Unclear',
-  not_a_pitch: 'Not a pitch',
+function splitTagsByAxis(tags: Tag[]): {
+  legitimacy: string | null
+  compensation: string[]
+} {
+  let legitimacy: string | null = null
+  const compensation: string[] = []
+  for (const t of tags) {
+    if (t.axis === 'legitimacy') legitimacy = t.slug
+    else if (t.axis === 'compensation') compensation.push(t.slug)
+  }
+  return { legitimacy, compensation }
 }
 
 // Pipeline stage row — visualizes deal progression at the top of the modal.
@@ -44,7 +57,7 @@ const STAGE_PROGRESSION: { value: DealStage; label: string }[] = [
   { value: 'inbox', label: 'Inbox' },
   { value: 'negotiating', label: 'Negotiating' },
   { value: 'confirmed', label: 'Confirmed' },
-  { value: 'delivered_paid', label: 'Delivered & paid' },
+  { value: 'delivered', label: 'Delivered' },
 ]
 
 function stageProgressionState(
@@ -61,7 +74,7 @@ function stageProgressionState(
 function nextPipelineStage(
   current: DealStage
 ): { value: DealStage; label: string } | null {
-  if (current === 'rejected' || current === 'delivered_paid') return null
+  if (current === 'rejected' || current === 'delivered') return null
   const idx = STAGE_PROGRESSION.findIndex((s) => s.value === current)
   if (idx === -1) return null
   return STAGE_PROGRESSION[idx + 1] ?? null
@@ -75,7 +88,6 @@ const PITCH_EDITABLE_FIELDS = [
   'budget_currency',
   'budget_notes',
   'deadline',
-  'category',
   'ai_summary',
   'user_notes',
 ] as const
@@ -126,6 +138,20 @@ export function PitchDetailModal({
   // (container >720px) all `.pdetail-pane` divs render via `display: contents`
   // so this value is visually inert.
   const [activeTab, setActiveTab] = useState<Tab>('pitch')
+  // CR-2 — tag-edit mode: pencil opens, chevron closes. Animation is pure CSS
+  // (250ms ease-out grid-template-rows 0fr → 1fr + opacity 0 → 1).
+  const [editTagsOpen, setEditTagsOpen] = useState(false)
+
+  // CR-2 — tag read/write via the generic taggable hook.
+  const { tags, setTags, loading: tagsLoading } = useEntityTags(
+    'pitch',
+    pitch.id,
+  )
+  const { legitimacy, compensation } = splitTagsByAxis(tags)
+  const compensationDisabled =
+    pitch.direction === 'inbound' &&
+    legitimacy !== null &&
+    legitimacy !== 'valid'
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -148,7 +174,6 @@ export function PitchDetailModal({
         '[PitchDetailModal] deal lookup failed:',
         lookupError.message
       )
-      // Leave deal as-is rather than overwriting; user can retry by reopening.
       return
     }
     setDeal((data as Deal | null) ?? null)
@@ -217,11 +242,42 @@ export function PitchDetailModal({
     setDraft({ ...draft, [key]: value })
   }
 
+  // CR-2 — chip-click handlers for the edit-tags section. Each toggle composes
+  // the full tag-set (legitimacy + compensation per axis rules) and fires
+  // useEntityTags.setTags, which calls update_pitch_with_activity + refetches.
+  // Per AC1.6: compensation tags only persisted when legitimacy === 'valid'.
+  async function onLegitimacyChange(nextLeg: string) {
+    if (pitch.direction === 'outbound') return // legitimacy server-injected
+    const nextSlugs =
+      nextLeg === 'valid'
+        ? [nextLeg, ...compensation]
+        : [nextLeg]
+    try {
+      await setTags(nextSlugs)
+      await fetchActivities()
+    } catch {
+      // useEntityTags surfaces the error via its own state; nothing extra here.
+    }
+  }
+
+  async function onCompensationChange(nextComp: string[]) {
+    // For inbound + legitimacy !== 'valid', UI is disabled so this shouldn't
+    // fire; defensive guard.
+    if (pitch.direction === 'inbound' && legitimacy !== 'valid') return
+    const legSlug =
+      pitch.direction === 'outbound' ? 'valid' : legitimacy ?? 'unclear'
+    try {
+      await setTags([legSlug, ...nextComp])
+      await fetchActivities()
+    } catch {
+      // hook owns the error surface
+    }
+  }
+
   async function onSave(e?: FormEvent) {
     e?.preventDefault()
     const diff = computePitchDiff(pitch, draft)
     if (Object.keys(diff).length === 0) {
-      // Nothing changed; just exit edit mode.
       setMode('read')
       return
     }
@@ -229,6 +285,9 @@ export function PitchDetailModal({
     setState('loading')
     setError(null)
     const supabase = createClient()
+    // CR-2 — pass current tag set (from useEntityTags) through unchanged.
+    // EditView no longer edits tags; the pencil-affordance flow owns that.
+    const tagSlugs = tags.map((t) => t.slug)
     const { error: rpcError } = await supabase.rpc(
       'update_pitch_with_activity',
       {
@@ -240,7 +299,7 @@ export function PitchDetailModal({
         p_budget_currency: draft.budget_currency,
         p_budget_notes: draft.budget_notes,
         p_deadline: draft.deadline,
-        p_category: draft.category,
+        p_tag_slugs: tagSlugs,
         p_ai_summary: draft.ai_summary,
         p_user_notes: draft.user_notes,
         p_field_diffs: diff,
@@ -255,14 +314,11 @@ export function PitchDetailModal({
     router.refresh()
   }
 
-  // ReadView notes auto-save on blur when user_notes changed in place. Without
-  // this, in-place note edits in ReadView would be silently lost (no Save button
-  // outside Edit mode). The RPC requires all pitch fields, so we pass the
-  // committed `pitch` values for everything except `user_notes` (which uses the
-  // draft).
+  // ReadView notes auto-save on blur when user_notes changed in place.
   async function persistUserNotesOnBlur() {
     if (draft.user_notes === pitch.user_notes) return
     const supabase = createClient()
+    const tagSlugs = tags.map((t) => t.slug)
     const { error: rpcError } = await supabase.rpc(
       'update_pitch_with_activity',
       {
@@ -274,7 +330,7 @@ export function PitchDetailModal({
         p_budget_currency: pitch.budget_currency,
         p_budget_notes: pitch.budget_notes,
         p_deadline: pitch.deadline,
-        p_category: pitch.category,
+        p_tag_slugs: tagSlugs,
         p_ai_summary: pitch.ai_summary,
         p_user_notes: draft.user_notes,
         p_field_diffs: { user_notes: [pitch.user_notes, draft.user_notes] },
@@ -290,9 +346,6 @@ export function PitchDetailModal({
     router.refresh()
   }
 
-  // Pre-populated draft handed to DealEditModal when the user picks "Start
-  // tracking deal" on a pitch with no deal yet. Seeded from the pitch's own
-  // values; id/user_id/timestamps are placeholders set by the create RPC.
   const startTrackingDraft: Deal = {
     id: '',
     pitch_id: pitch.id,
@@ -340,8 +393,6 @@ export function PitchDetailModal({
     setState('loading')
     setError(null)
     const supabase = createClient()
-    // Direct DELETE cascades to deals + activities via FK ON DELETE CASCADE.
-    // RLS gates ownership.
     const { error: deleteError } = await supabase
       .from('pitches')
       .delete()
@@ -354,6 +405,10 @@ export function PitchDetailModal({
     onClose()
     router.refresh()
   }
+
+  // Gate the body + footer on initial loads. Includes tags so the receipts
+  // grid doesn't show "Untagged" briefly before the real tag set arrives.
+  const initialLoading = deal === undefined || tagsLoading
 
   return (
     <>
@@ -395,10 +450,7 @@ export function PitchDetailModal({
           </header>
 
 
-          {deal === undefined ? (
-            // Hold the body + footer until the deal lookup resolves so the
-            // pipeline stage row doesn't pop in after the rest. Activities
-            // load in the same `Promise.all`, so this gate covers both.
+          {initialLoading ? (
             <div className="pitch-modal-loading" role="status" aria-live="polite">
               <Spinner className="h-6 w-6" />
               <span className="sr-only">Loading pitch detail…</span>
@@ -417,6 +469,15 @@ export function PitchDetailModal({
                   onNoteBlur={persistUserNotesOnBlur}
                   onStartTracking={() => setDealEditOpen(true)}
                   onEditDeal={() => setDealEditOpen(true)}
+                  tags={tags}
+                  legitimacy={legitimacy}
+                  compensation={compensation}
+                  compensationDisabled={compensationDisabled}
+                  editTagsOpen={editTagsOpen}
+                  onOpenEditTags={() => setEditTagsOpen(true)}
+                  onCloseEditTags={() => setEditTagsOpen(false)}
+                  onLegitimacyChange={onLegitimacyChange}
+                  onCompensationChange={onCompensationChange}
                 />
               ) : (
                 <EditView draft={draft} update={update} onSave={onSave} />
@@ -530,6 +591,28 @@ export function PitchDetailModal({
   )
 }
 
+interface ReadViewProps {
+  pitch: Pitch
+  draft: Pitch
+  setDraft: (p: Pitch) => void
+  deal: Deal | null | undefined
+  activities: Activity[]
+  activeTab: Tab
+  setActiveTab: (t: Tab) => void
+  onNoteBlur: () => void
+  onStartTracking: () => void
+  onEditDeal: () => void
+  tags: Tag[]
+  legitimacy: string | null
+  compensation: string[]
+  compensationDisabled: boolean
+  editTagsOpen: boolean
+  onOpenEditTags: () => void
+  onCloseEditTags: () => void
+  onLegitimacyChange: (next: string) => void
+  onCompensationChange: (next: string[]) => void
+}
+
 function ReadView({
   pitch,
   draft,
@@ -541,27 +624,21 @@ function ReadView({
   onNoteBlur,
   onStartTracking,
   onEditDeal,
-}: {
-  pitch: Pitch
-  draft: Pitch
-  setDraft: (p: Pitch) => void
-  deal: Deal | null | undefined
-  activities: Activity[]
-  activeTab: Tab
-  setActiveTab: (t: Tab) => void
-  onNoteBlur: () => void
-  onStartTracking: () => void
-  onEditDeal: () => void
-}) {
+  tags,
+  legitimacy,
+  compensation,
+  compensationDisabled,
+  editTagsOpen,
+  onOpenEditTags,
+  onCloseEditTags,
+  onLegitimacyChange,
+  onCompensationChange,
+}: ReadViewProps) {
   const deadlineParts = formatDeadline(pitch.deadline)
   const isOutbound = pitch.direction === 'outbound'
 
   return (
     <div className="pitch-read">
-      {/* Hero stays outside any pane so the brand H1 is always visible — on
-          mobile, switching between Pitch / Deal / Activity tabs preserves
-          this as context. The pipeline stage row sits directly below as
-          a status header (also pane-agnostic). */}
       <div className="pitch-hero">
         <h1 className="pitch-hero-h1">
           {(pitch.brand_name ?? 'Untitled pitch').toUpperCase()}
@@ -668,13 +745,81 @@ function ReadView({
               <span className="muted">{deadlineParts.relative}</span>
             )}
           </Cell>
-          {!isOutbound && (
-            <Cell label="Category">
-              <strong className="pitch-cell-name">
-                {CATEGORY_LABEL[pitch.category]}
-              </strong>
-            </Cell>
-          )}
+          {/* CR-2 — Tags cell replaces the prior Category cell. Always renders
+              (both inbound + outbound); TagBadges hides legitimacy for outbound
+              and hides compensation when legitimacy !== 'valid'. Inline pencil
+              affordance at the top-right opens the slide-down edit-tags section
+              below the receipts grid. */}
+          <div className="pitch-cell pdetail-cell is-tags">
+            <span className="kicker">Tags</span>
+            <button
+              type="button"
+              className="pdetail-cell-edit-trigger"
+              onClick={onOpenEditTags}
+              aria-label="Edit tags"
+              aria-expanded={editTagsOpen}
+            >
+              <PencilIcon />
+            </button>
+            <div className="pitch-cell-body">
+              <TagBadges
+                tags={tags}
+                direction={pitch.direction}
+                hideLegitimacy={isOutbound}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* CR-2 — Edit-tags slide-down section. Always rendered for the
+            animation (parent's grid-template-rows 0fr → 1fr handles the
+            collapse). Receipts grid above + deal block below stay anchored. */}
+        <div
+          className={
+            'pdetail-edit-tags-slot' + (editTagsOpen ? ' is-open' : '')
+          }
+        >
+          <div className="pdetail-edit-tags-inner">
+            <div className="pdetail-edit-tags">
+              <div className="pdetail-edit-tags-head">
+                <span className="pdetail-edit-tags-l">
+                  Edit tags
+                  <span className="pdetail-edit-tags-meta">
+                    {isOutbound
+                      ? 'Outbound · only compensation is editable'
+                      : 'Legitimacy first · compensation enables on Valid'}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className="pdetail-edit-tags-collapse"
+                  onClick={onCloseEditTags}
+                  aria-label="Collapse edit-tags section"
+                >
+                  ⌃
+                </button>
+              </div>
+              <div className="pdetail-edit-tags-body">
+                {!isOutbound && (
+                  <ChipSelector
+                    axis="Legitimacy"
+                    kind="radio"
+                    options={LEGITIMACY_OPTIONS}
+                    value={legitimacy}
+                    onChange={onLegitimacyChange}
+                  />
+                )}
+                <ChipSelector
+                  axis="Compensation"
+                  kind="checkbox"
+                  options={COMPENSATION_OPTIONS}
+                  value={compensation}
+                  onChange={onCompensationChange}
+                  disabled={compensationDisabled}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -858,9 +1003,6 @@ function EditView({
   onSave: (e?: FormEvent) => void
 }) {
   const isOutbound = draft.direction === 'outbound'
-  // Local raw string for deliverables — see the matching comment in
-  // DealEditModal. A derived `array.join(', ')` controlled input would
-  // swallow user-typed spaces + trailing commas.
   const [deliverablesInput, setDeliverablesInput] = useState(
     draft.deliverables.join(', ')
   )
@@ -935,23 +1077,10 @@ function EditView({
           onChange={(v) => update('deadline', v || null)}
         />
       </Field>
-      {!isOutbound && (
-        <Field label="Category">
-          <select
-            value={draft.category}
-            onChange={(e) =>
-              update('category', e.target.value as PitchCategory)
-            }
-            className="signin-input w-full"
-          >
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {CATEGORY_LABEL[c]}
-              </option>
-            ))}
-          </select>
-        </Field>
-      )}
+      {/* CR-2 — Category dropdown removed. Tags are edited via the pencil
+          affordance in the Tags cell (ReadView) which opens an in-place
+          slide-down edit section; chip-toggle auto-saves via the
+          useEntityTags hook. EditView is for non-tag fields only. */}
       <Field label="AI summary">
         <textarea
           rows={2}
@@ -1002,6 +1131,28 @@ function TextInput({
       onChange={(e) => onChange(e.target.value)}
       className="signin-input w-full"
     />
+  )
+}
+
+// Lucide `Pencil` icon (MIT-licensed; https://lucide.dev). 12px in 16×16 hit
+// target. `stroke: currentColor` so the color follows the affordance state
+// (--ink-3 resting → --ink hover) via the parent button's CSS.
+function PencilIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+      <path d="m15 5 4 4" />
+    </svg>
   )
 }
 

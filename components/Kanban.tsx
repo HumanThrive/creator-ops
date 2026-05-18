@@ -12,7 +12,7 @@ const COLUMNS: { stage: DealStage; label: string }[] = [
   { stage: 'inbox', label: 'Inbox' },
   { stage: 'negotiating', label: 'Negotiating' },
   { stage: 'confirmed', label: 'Confirmed' },
-  { stage: 'delivered_paid', label: 'Delivered & paid' },
+  { stage: 'delivered', label: 'Delivered' },
 ]
 
 type DirectionFilter = 'inbound' | 'outbound' | 'all'
@@ -31,10 +31,13 @@ const FILTER_COUNT_LABEL: Record<DirectionFilter, string> = {
 
 /** Joined view: a deal paired with its parent pitch. Built in the server
  *  component (page.tsx) and passed into Kanban so this client component
- *  doesn't need to issue its own queries. */
+ *  doesn't need to issue its own queries.
+ *  CR-2: `tags` carries the pitch's entity_tags slug array — drives
+ *  PitchCard's AC4.8 compensation indicator. */
 export interface DealWithPitch {
   deal: Deal
   pitch: Pitch
+  tags: string[]
 }
 
 // CEO Q8: per column, the highest-budget deal gets the spotlight ring.
@@ -160,6 +163,7 @@ export function Kanban({ items }: { items: DealWithPitch[] }) {
                     key={item.deal.id}
                     pitch={item.pitch}
                     deal={item.deal}
+                    tags={item.tags}
                     spotlight={item.deal.id === spotId}
                     onClick={() => setSelectedPitchId(item.pitch.id)}
                   />

@@ -15,8 +15,8 @@ export interface PitchStats {
   currencyTotals: CurrencyTotal[] // sorted desc by amount
   /** "In pipeline" totals derived from `deals` table where stage is non-terminal.
    *  Per FR-4 AC7.3 (2026-05-17): reads from `deals.current_budget_amount` filtered
-   *  to stages inbox / negotiating / confirmed; excludes delivered_paid + rejected
-   *  (terminal stages) + NULL budgets (typical for gifting_only deals). */
+   *  to stages inbox / negotiating / confirmed; excludes delivered + rejected
+   *  (terminal stages) + NULL budgets (typical for non-cash deals). */
   pipelineCurrencyTotals: CurrencyTotal[] // sorted desc by amount
 }
 

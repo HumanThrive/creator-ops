@@ -14,12 +14,17 @@ interface BrandHistoryTableProps {
   pitches: Pitch[]
   dealsByPitchId: Record<string, Deal | undefined>
   activitiesByPitchId: Record<string, Activity[] | undefined>
+  // CR-2 — pitch tag slugs (entity_tags joined to tags) per pitch_id. Replaces
+  // the pre-CR-2 `pitch.category` predicate path. Empty/missing entry treated
+  // as no tags (defensive — every pitch should have at least a legitimacy tag).
+  tagsByPitchId: Record<string, string[] | undefined>
 }
 
 export function BrandHistoryTable({
   pitches,
   dealsByPitchId,
   activitiesByPitchId,
+  tagsByPitchId,
 }: BrandHistoryTableProps) {
   const [selected, setSelected] = useState<Pitch | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -47,6 +52,8 @@ export function BrandHistoryTable({
           const deal = dealsByPitchId[p.id]
           const activities = activitiesByPitchId[p.id] ?? []
           const isExpanded = expanded.has(p.id)
+          const pitchTags = tagsByPitchId[p.id] ?? []
+          const isNotPitch = pitchTags.includes('not_a_pitch')
           return (
             <Fragment key={p.id}>
               <div
@@ -69,9 +76,9 @@ export function BrandHistoryTable({
                   </span>
                 </span>
                 {deal ? (
-                  <StageChip stage={deal.stage} category={p.category} />
-                ) : p.category === 'not_a_pitch' ? (
-                  <StageChip stage="inbox" category={p.category} />
+                  <StageChip stage={deal.stage} isNotPitch={isNotPitch} />
+                ) : isNotPitch ? (
+                  <StageChip stage="inbox" isNotPitch />
                 ) : (
                   <span className="history-amt muted">No deal</span>
                 )}

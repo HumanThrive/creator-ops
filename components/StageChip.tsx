@@ -1,11 +1,10 @@
 import type { DealStage } from '@/lib/types/deal'
-import type { PitchCategory } from '@/lib/types/pitch'
 
 const STAGE_LABEL: Record<DealStage, string> = {
   inbox: 'Inbox',
   negotiating: 'Negotiating',
   confirmed: 'Confirmed',
-  delivered_paid: 'Delivered',
+  delivered: 'Delivered',
   rejected: 'Rejected',
 }
 
@@ -13,20 +12,22 @@ const STAGE_VARIANT: Record<DealStage, string> = {
   inbox: 'inbox',
   negotiating: 'negotiating',
   confirmed: 'confirmed',
-  delivered_paid: 'delivered',
+  delivered: 'delivered',
   rejected: 'rejected',
 }
 
 interface StageChipProps {
   stage: DealStage
-  // The DB models `not_a_pitch` as a category on `pitches`, but the design
-  // system treats it as a stage-variant chip override. When set, the category
-  // override wins for display.
-  category?: PitchCategory
+  // CR-2 — pitch's `not_a_pitch` legitimacy tag drives a stage-chip override
+  // (the design treats not-a-pitch as a stage-level visual variant, even
+  // though it's a tag-axis value semantically). Caller computes the predicate
+  // (`tags.includes('not_a_pitch')`) and passes the boolean. Replaces the
+  // pre-CR-2 `category` prop.
+  isNotPitch?: boolean
 }
 
-export function StageChip({ stage, category }: StageChipProps) {
-  if (category === 'not_a_pitch') {
+export function StageChip({ stage, isNotPitch }: StageChipProps) {
+  if (isNotPitch) {
     return <span className="stage notpitch">Not a pitch</span>
   }
   return (

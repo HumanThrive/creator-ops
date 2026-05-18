@@ -1,6 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
-import { buildSystemPrompt, type ExtractDirection } from '@/lib/prompts/extract-system'
+import {
+  buildSystemPrompt,
+  type ExtractDirection,
+  type TagListItem,
+} from '@/lib/prompts/extract-system'
 import type { ExtractedPitch } from '@/lib/types/pitch'
 
 const anthropic = new Anthropic()
@@ -65,6 +69,21 @@ export async function POST(request: Request) {
     )
   }
 
+  const { data: tagRows, error: tagError } = await supabase
+    .from('tags')
+    .select('slug, display_label, axis')
+    .eq('scope', 'pitch')
+    .order('axis')
+    .order('slug')
+  if (tagError || !tagRows || tagRows.length === 0) {
+    console.error('[api/extract] tag list query failed:', tagError?.message)
+    return Response.json(
+      { success: false, error: 'tag_list_unavailable' },
+      { status: 502 },
+    )
+  }
+  const tagList: TagListItem[] = tagRows
+
   let message
   try {
     message = await anthropic.messages.create({
@@ -73,7 +92,7 @@ export async function POST(request: Request) {
       system: [
         {
           type: 'text',
-          text: buildSystemPrompt(direction),
+          text: buildSystemPrompt(direction, tagList),
           cache_control: { type: 'ephemeral' },
         },
       ],
@@ -114,6 +133,12 @@ export async function POST(request: Request) {
       { success: false, error: 'extraction_parse_failed' },
       { status: 502 }
     )
+  }
+
+  // Outbound: server injects 'valid' legitimacy tag (AI emits compensation only per AC1.4).
+  if (direction === 'outbound') {
+    const aiTags = Array.isArray(parsed.tags) ? parsed.tags : []
+    parsed.tags = aiTags.includes('valid') ? aiTags : ['valid', ...aiTags]
   }
 
   return Response.json({ success: true, data: parsed })
