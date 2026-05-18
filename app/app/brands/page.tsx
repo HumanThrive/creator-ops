@@ -7,7 +7,7 @@ import type { Pitch } from '@/lib/types/pitch'
 import type { Deal } from '@/lib/types/deal'
 
 export const metadata: Metadata = {
-  title: 'Brands · SupaSpike',
+  title: 'Brands',
 }
 
 export default async function BrandsPage() {

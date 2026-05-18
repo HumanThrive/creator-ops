@@ -24,9 +24,7 @@ export async function generateMetadata({
     .order('created_at', { ascending: false })
   const detail = findBrandDetail((pitches ?? []) as Pitch[], brandSlug)
   return {
-    title: detail
-      ? `${detail.displayName} · SupaSpike`
-      : 'Brands · SupaSpike',
+    title: detail ? detail.displayName : 'Brands',
   }
 }
 

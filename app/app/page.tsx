@@ -11,7 +11,7 @@ import type { Deal } from '@/lib/types/deal'
 import type { Tag } from '@/lib/hooks/useEntityTags'
 
 export const metadata: Metadata = {
-  title: 'Pitches · SupaSpike',
+  title: 'Pitches',
 }
 
 export default async function AppPage() {
