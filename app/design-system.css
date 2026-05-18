@@ -824,7 +824,6 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   flex: 1;
-  align-items: start;
 }
 .col {
   background: var(--paper-board);
@@ -3759,3 +3758,240 @@
   border-color: var(--line-board);
 }
 .add-modal-textarea.is-extracted:focus { background: var(--paper); }
+
+/* ════════════════════════════════════════════════════════════
+   CR-4 — Pitch feed surface + DirIndicator standalone canon
+   ════════════════════════════════════════════════════════════ */
+
+/* ─────────── Direction indicator (canonical .dir kicker) ─────────── */
+/* Lifted from FR-4 design reference; surfaces with DirIndicator (CR-4)
+   variant="kicker". Existing per-surface variants (.card-dir ribbon
+   and .pitch-modal-dirchip head pill) live elsewhere in this stylesheet. */
+
+.dir {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.dir .dir-arrow {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--accent);
+  line-height: 1;
+  display: inline-flex; align-items: center;
+  transform: translateY(-0.5px);
+}
+.dir.is-outbound .dir-arrow { color: var(--ink); }
+
+/* ─────────── Pitch feed ─────────── */
+
+.feed {
+  background: var(--paper);
+  border: 1px solid var(--line-board);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+/* Head band */
+.feed-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px;
+  padding: 13px 20px;
+  border-bottom: 1px solid var(--line-board);
+  background: var(--paper-board);
+}
+.feed-head-l {
+  display: flex; align-items: center; gap: 14px;
+  min-width: 0;
+}
+.feed-kicker {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 8px;
+  white-space: nowrap;
+}
+.feed-kicker::before {
+  content: ""; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--accent);
+}
+.feed-title {
+  font-family: var(--body); font-weight: 600;
+  font-size: 15px; color: var(--ink);
+  letter-spacing: -0.005em;
+}
+.feed-n {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.08em; color: var(--ink-4);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.feed-head-r {
+  display: flex; align-items: center; gap: 14px;
+  flex-shrink: 0;
+}
+.feed-collapse {
+  font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink); background: transparent; border: 0;
+  cursor: pointer; padding: 4px 0;
+  display: inline-flex; align-items: center; gap: 8px;
+  border-bottom: 1px solid var(--line-2);
+}
+.feed-collapse:hover { border-color: var(--ink); }
+.feed-collapse-i {
+  font-family: var(--mono); font-size: 13px;
+  line-height: 1; transform: translateY(-1px);
+}
+
+/* Row — single log line; flat, hairline-separated, no shadow. */
+.feed-rows { display: flex; flex-direction: column; }
+.feed-row {
+  display: grid;
+  grid-template-columns: 86px 86px 1fr 240px 22px;
+  gap: 18px;
+  align-items: center;
+  padding: 13px 20px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  transition: background 0.15s;
+  background: var(--paper);
+}
+.feed-row:last-child { border-bottom: none; }
+.feed-row:hover { background: var(--paper-board); }
+.feed-row:hover .feed-arrow {
+  color: var(--accent); transform: translateX(2px);
+}
+.feed-ts {
+  font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.08em; color: var(--ink-3);
+  text-transform: uppercase; white-space: nowrap;
+}
+.feed-dir .dir { font-size: 9.5px; }
+.feed-dir .dir .dir-arrow { font-size: 11px; }
+/* Mobile-only meta wrapper — hidden on desktop, shown via @container below */
+.feed-meta { display: none; }
+.feed-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.feed-brand {
+  font-family: var(--body); font-weight: 600;
+  font-size: 14px; color: var(--ink);
+  letter-spacing: -0.005em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.feed-brand.is-unknown {
+  color: var(--ink-3); font-style: italic; font-weight: 500;
+}
+.feed-sum {
+  font-size: 12.5px; color: var(--ink-3);
+  line-height: 1.4;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.feed-tags-wrap {
+  display: flex; justify-content: flex-end; align-items: center;
+  overflow: hidden;
+}
+.feed-tags-wrap .tag-badges {
+  flex-wrap: nowrap;
+}
+.feed-arrow {
+  font-family: var(--mono); font-size: 14px;
+  color: var(--ink-4); text-align: right;
+  transition: color 0.15s, transform 0.15s;
+}
+
+/* Scroll-constrained variant — kicks in above ~10 rows */
+.feed-scroll {
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+/* Foot link */
+.feed-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--paper-board);
+  border-top: 1px solid var(--line-board);
+  font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-3);
+}
+.feed-foot b { color: var(--ink); font-weight: 600; }
+.feed-foot-link {
+  color: var(--ink);
+  border-bottom: 1px solid var(--line-2);
+  padding-bottom: 1px;
+  cursor: pointer;
+}
+.feed-foot-link:hover { border-color: var(--ink); }
+
+/* Empty state — striped ground + display heading + body */
+.feed-empty {
+  padding: 40px 24px 44px;
+  display: flex; flex-direction: column; gap: 14px;
+  align-items: center; text-align: center;
+  background:
+    repeating-linear-gradient(
+      135deg,
+      var(--paper) 0 11px,
+      var(--paper-board) 11px 22px
+    );
+}
+.feed-empty-stamp {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--accent);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.feed-empty-stamp::before {
+  content: ""; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--accent);
+}
+.feed-empty-h {
+  font-family: var(--display); font-weight: 400;
+  font-size: 32px; line-height: 1;
+  letter-spacing: 0.005em; text-transform: uppercase;
+  color: var(--ink); margin: 0;
+}
+.feed-empty-b {
+  font-family: var(--body); font-size: 13.5px;
+  line-height: 1.5; color: var(--ink-3);
+  max-width: 50ch; margin: 0;
+}
+.feed-empty-b b { color: var(--ink); font-weight: 600; }
+
+/* Collapsed state — head only (count badge visible). React conditionally
+   omits rows/foot/empty when !expanded; the .is-collapsed modifier also
+   drops the head's border-bottom so the section reads as a single bar. */
+.feed.is-collapsed .feed-head { border-bottom: none; }
+
+@container app (max-width: 720px) {
+  .feed-row {
+    grid-template-columns: 1fr 22px;
+    grid-template-areas:
+      "meta arrow"
+      "body body"
+      "tags tags";
+    gap: 6px 10px;
+    padding: 14px 16px;
+  }
+  .feed-meta { grid-area: meta; display: flex; align-items: center; gap: 10px; }
+  .feed-arrow { grid-area: arrow; align-self: start; padding-top: 2px; }
+  .feed-body { grid-area: body; }
+  .feed-tags-wrap { grid-area: tags; justify-content: flex-start; }
+  .feed-tags-wrap .tag-badges { flex-wrap: wrap; }
+  .feed-ts { display: none; }
+  .feed-meta .feed-ts { display: inline; }
+  .feed-dir { display: none; }
+  .feed-meta .feed-dir { display: inline-flex; }
+  .feed-head { padding: 11px 16px; }
+  .feed-foot { padding: 10px 16px; }
+  .feed-scroll { max-height: 360px; }
+  .feed-empty { padding: 32px 18px 36px; }
+  .feed-empty-h { font-size: 26px; }
+}

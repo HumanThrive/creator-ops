@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
@@ -10,6 +11,23 @@ import type { Activity } from '@/lib/types/activity'
 
 interface BrandDetailPageProps {
   params: Promise<{ brand: string }>
+}
+
+export async function generateMetadata({
+  params,
+}: BrandDetailPageProps): Promise<Metadata> {
+  const { brand: brandSlug } = await params
+  const supabase = await createClient()
+  const { data: pitches } = await supabase
+    .from('pitches')
+    .select('*')
+    .order('created_at', { ascending: false })
+  const detail = findBrandDetail((pitches ?? []) as Pitch[], brandSlug)
+  return {
+    title: detail
+      ? `${detail.displayName} · SupaSpike`
+      : 'Brands · SupaSpike',
+  }
 }
 
 export default async function BrandDetailPage({ params }: BrandDetailPageProps) {

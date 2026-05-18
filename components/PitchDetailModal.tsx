@@ -18,6 +18,7 @@ import { formatActivityEvent } from '@/lib/activity-format'
 import { useEntityTags, type Tag } from '@/lib/hooks/useEntityTags'
 import { Spinner } from './Spinner'
 import { StageChip } from './StageChip'
+import { DirIndicator } from './DirIndicator'
 import { DealEditModal } from './DealEditModal'
 import { ChipSelector, type ChipSelectorOption } from './ChipSelector'
 import { TagBadges } from './TagBadges'
@@ -420,20 +421,15 @@ export function PitchDetailModal({
         >
           <header className="pitch-modal-head">
             <div className="pitch-modal-head-l">
-              <span
-                className={
-                  'pitch-modal-dirchip' +
-                  (pitch.direction === 'outbound' ? ' is-outbound' : '')
+              <DirIndicator
+                variant="chip"
+                direction={pitch.direction}
+                label={
+                  pitch.direction === 'outbound'
+                    ? 'Pitch to brand'
+                    : 'Pitch from brand'
                 }
-                aria-label={`Direction: ${pitch.direction}`}
-              >
-                <span className="pitch-modal-dirchip-arrow" aria-hidden>
-                  {pitch.direction === 'outbound' ? '↗' : '↘'}
-                </span>
-                {pitch.direction === 'outbound'
-                  ? 'Pitch to brand'
-                  : 'Pitch from brand'}
-              </span>
+              />
               <span className="pitch-modal-band-when">
                 {pitch.direction === 'outbound' ? 'Sent' : 'Received'}{' '}
                 {formatFullDate(pitch.created_at)}
@@ -579,6 +575,7 @@ export function PitchDetailModal({
         <DealEditModal
           mode={deal ? 'edit' : 'create'}
           deal={deal ?? startTrackingDraft}
+          direction={pitch.direction}
           onClose={() => setDealEditOpen(false)}
           onSaved={() => {
             fetchDeal()
@@ -861,7 +858,7 @@ function ReadView({
             <div className="pdetail-deal-grid">
               <div className="pdetail-deal-cell">
                 <span className="pdetail-deal-cell-l">Stage</span>
-                <StageChip stage={deal.stage} />
+                <StageChip stage={deal.stage} direction={pitch.direction} />
               </div>
               <div className="pdetail-deal-cell">
                 <span className="pdetail-deal-cell-l">Current budget</span>

@@ -76,9 +76,13 @@ export function BrandHistoryTable({
                   </span>
                 </span>
                 {deal ? (
-                  <StageChip stage={deal.stage} isNotPitch={isNotPitch} />
+                  <StageChip
+                    stage={deal.stage}
+                    direction={p.direction}
+                    isNotPitch={isNotPitch}
+                  />
                 ) : isNotPitch ? (
-                  <StageChip stage="inbox" isNotPitch />
+                  <StageChip stage="inbox" direction={p.direction} isNotPitch />
                 ) : (
                   <span className="history-amt muted">No deal</span>
                 )}

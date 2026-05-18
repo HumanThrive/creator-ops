@@ -1,9 +1,14 @@
+import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { BrandsList } from '@/components/BrandsList'
 import { AddPitchTrigger } from '@/components/AddPitchTrigger'
 import { computeBrandSummaries, computePitchStats } from '@/lib/pitch-stats'
 import type { Pitch } from '@/lib/types/pitch'
 import type { Deal } from '@/lib/types/deal'
+
+export const metadata: Metadata = {
+  title: 'Brands · SupaSpike',
+}
 
 export default async function BrandsPage() {
   const supabase = await createClient()

@@ -1,21 +1,17 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import type { Pitch } from '@/lib/types/pitch'
+import { useState } from 'react'
+import type { Pitch, PitchDirection } from '@/lib/types/pitch'
 import type { Deal, DealStage } from '@/lib/types/deal'
+import { getStageLabel } from '@/lib/stage-labels'
 import { PitchCard } from './PitchCard'
 import { PitchDetailModal } from './PitchDetailModal'
 
-const DIRECTION_STORAGE_KEY = 'supaspike.kanbanDirection'
+// CR-4 Q3 Lock — `rejected` stage stays out of Kanban (reachable only via
+// DealEditModal). Column labels derive from getStageLabel at render time.
+const COLUMNS: DealStage[] = ['inbox', 'negotiating', 'confirmed', 'delivered']
 
-const COLUMNS: { stage: DealStage; label: string }[] = [
-  { stage: 'inbox', label: 'Inbox' },
-  { stage: 'negotiating', label: 'Negotiating' },
-  { stage: 'confirmed', label: 'Confirmed' },
-  { stage: 'delivered', label: 'Delivered' },
-]
-
-type DirectionFilter = 'inbound' | 'outbound' | 'all'
+export type DirectionFilter = 'inbound' | 'outbound' | 'all'
 
 const FILTERS: { value: DirectionFilter; label: string; arrow: string | null }[] = [
   { value: 'inbound', label: 'Inbound', arrow: '↘' },
@@ -60,30 +56,14 @@ function spotlightId(items: DealWithPitch[]): string | null {
   return best?.deal.id ?? null
 }
 
-export function Kanban({ items }: { items: DealWithPitch[] }) {
+interface KanbanProps {
+  items: DealWithPitch[]
+  direction: DirectionFilter
+  onDirectionChange: (next: DirectionFilter) => void
+}
+
+export function Kanban({ items, direction, onDirectionChange }: KanbanProps) {
   const [selectedPitchId, setSelectedPitchId] = useState<string | null>(null)
-  const [direction, setDirection] = useState<DirectionFilter>('inbound')
-  // `hydrated` gates the first paint: SSR + initial client render show nothing
-  // for the toggle bar and board, then the post-hydration effect reads the
-  // persisted direction from localStorage and flips this true. Skips the flash
-  // of "inbound" content before snapping to the stored filter.
-  const [hydrated, setHydrated] = useState(false)
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const stored = window.localStorage.getItem(DIRECTION_STORAGE_KEY)
-    if (stored === 'inbound' || stored === 'outbound' || stored === 'all') {
-      setDirection(stored)
-    }
-    setHydrated(true)
-  }, [])
-
-  function selectDirection(next: DirectionFilter) {
-    setDirection(next)
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(DIRECTION_STORAGE_KEY, next)
-    }
-  }
 
   const filtered = items.filter(
     (item) => direction === 'all' || item.pitch.direction === direction
@@ -94,16 +74,12 @@ export function Kanban({ items }: { items: DealWithPitch[] }) {
   const selectedPitch =
     items.find((item) => item.pitch.id === selectedPitchId)?.pitch ?? null
 
-  if (!hydrated) {
-    // SSR + first client paint: render nothing for the toggle + board so the
-    // user never sees the default 'inbound' state flash before the persisted
-    // direction lands. The post-hydration effect flips `hydrated` true once
-    // localStorage has been read.
-    return null
-  }
-
   const totalCount = filtered.length
   const countNoun = direction === 'all' ? 'DEALS' : 'PITCHES'
+  // AC3.3 — `all` filter resolves to inbound-canonical for column headers
+  // (Phase A is inbound-dominant; cards carry their own direction).
+  const headerDirection: PitchDirection =
+    direction === 'all' ? 'inbound' : direction
 
   return (
     <>
@@ -123,7 +99,7 @@ export function Kanban({ items }: { items: DealWithPitch[] }) {
               key={f.value}
               type="button"
               role="tab"
-              onClick={() => selectDirection(f.value)}
+              onClick={() => onDirectionChange(f.value)}
               className={
                 'dir-filter-btn' + (direction === f.value ? ' is-active' : '')
               }
@@ -140,7 +116,7 @@ export function Kanban({ items }: { items: DealWithPitch[] }) {
         </div>
       </div>
       <section className="board">
-        {COLUMNS.map(({ stage, label }) => {
+        {COLUMNS.map((stage) => {
           const colItems = filtered.filter((item) => item.deal.stage === stage)
           const spotId = spotlightId(colItems)
           const countStr = String(colItems.length).padStart(2, '0')
@@ -148,7 +124,7 @@ export function Kanban({ items }: { items: DealWithPitch[] }) {
             <div key={stage} className="col">
               <div className="col-head">
                 <div className="col-head-l">
-                  <strong>{label}</strong>
+                  <strong>{getStageLabel(stage, headerDirection)}</strong>
                 </div>
                 <span className="col-n">{countStr}</span>
               </div>

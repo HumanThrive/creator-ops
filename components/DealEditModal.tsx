@@ -3,14 +3,16 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Deal, DealStage } from '@/lib/types/deal'
+import type { PitchDirection } from '@/lib/types/pitch'
+import { getStageLabel } from '@/lib/stage-labels'
 import { Spinner } from './Spinner'
 
-const STAGES: { value: DealStage; label: string; variant: string }[] = [
-  { value: 'inbox', label: 'Inbox', variant: 'inbox' },
-  { value: 'negotiating', label: 'Negotiating', variant: 'negotiating' },
-  { value: 'confirmed', label: 'Confirmed', variant: 'confirmed' },
-  { value: 'delivered', label: 'Delivered', variant: 'delivered' },
-  { value: 'rejected', label: 'Rejected', variant: 'rejected' },
+const STAGES: DealStage[] = [
+  'inbox',
+  'negotiating',
+  'confirmed',
+  'delivered',
+  'rejected',
 ]
 
 type AsyncState = 'idle' | 'loading' | 'error'
@@ -24,6 +26,10 @@ interface DealEditModalProps {
    *  `"create"` writes a new deal via `create_deal_with_activity` using
    *  `deal.pitch_id` as the parent. */
   mode?: 'edit' | 'create'
+  /** CR-4 Q3 Lock — parent pitch's direction drives the first-stage button
+   *  label ('Inbox' for inbound, 'Sent' for outbound). Optional default
+   *  preserves pre-CR-4 visual canon when direction isn't in scope. */
+  direction?: PitchDirection
   onClose: () => void
   onSaved?: () => void
 }
@@ -43,6 +49,7 @@ function parseDeliverables(text: string): string[] {
 export function DealEditModal({
   deal,
   mode = 'edit',
+  direction = 'inbound',
   onClose,
   onSaved,
 }: DealEditModalProps) {
@@ -234,17 +241,17 @@ export function DealEditModal({
         <form onSubmit={onSave} className="pitch-edit">
           <Field label="Stage">
             <div className="flex flex-wrap gap-2 pt-1">
-              {STAGES.map((s) => {
-                const active = draft.stage === s.value
+              {STAGES.map((stage) => {
+                const active = draft.stage === stage
                 return (
                   <button
-                    key={s.value}
+                    key={stage}
                     type="button"
-                    onClick={() => update('stage', s.value)}
-                    className={`stage ${s.variant} cursor-pointer transition-opacity ${active ? '' : 'opacity-40 hover:opacity-70'}`}
+                    onClick={() => update('stage', stage)}
+                    className={`stage ${stage} cursor-pointer transition-opacity ${active ? '' : 'opacity-40 hover:opacity-70'}`}
                     aria-pressed={active}
                   >
-                    {s.label}
+                    {getStageLabel(stage, direction)}
                   </button>
                 )
               })}

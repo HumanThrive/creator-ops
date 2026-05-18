@@ -3,6 +3,7 @@
 import type { Pitch } from '@/lib/types/pitch'
 import type { Deal } from '@/lib/types/deal'
 import { formatCurrencyAmount } from '@/lib/pitch-stats'
+import { DirIndicator } from './DirIndicator'
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 
@@ -87,15 +88,11 @@ export function PitchCard({
       }
       aria-label={`Open ${pitch.direction} pitch from ${pitch.brand_name ?? 'unknown brand'}`}
     >
-      <span
-        className={
-          'card-dir' + (pitch.direction === 'outbound' ? ' is-outbound' : '')
-        }
-        aria-label={pitch.direction}
-      >
-        <span aria-hidden>{pitch.direction === 'outbound' ? '↗' : '↘'}</span>
-        {pitch.direction === 'outbound' ? 'Out' : 'In'}
-      </span>
+      <DirIndicator
+        variant="ribbon"
+        direction={pitch.direction}
+        label={pitch.direction === 'outbound' ? 'Out' : 'In'}
+      />
       <div className="card-r1">
         <span className="card-brand">{pitch.brand_name ?? 'Unknown brand'}</span>
         <CardAmtSlot

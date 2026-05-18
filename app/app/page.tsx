@@ -1,16 +1,26 @@
+import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
-import { Kanban, type DealWithPitch } from '@/components/Kanban'
+import { AppBoard } from '@/components/AppBoard'
+import type { DealWithPitch } from '@/components/Kanban'
+import type { PitchWithTags } from '@/components/PitchFeed'
 import { StatsStrip } from '@/components/StatsStrip'
 import { computePitchStats } from '@/lib/pitch-stats'
+import { isNewUser } from '@/lib/user'
 import type { Pitch } from '@/lib/types/pitch'
 import type { Deal } from '@/lib/types/deal'
+import type { Tag } from '@/lib/hooks/useEntityTags'
+
+export const metadata: Metadata = {
+  title: 'Pitches · SupaSpike',
+}
 
 export default async function AppPage() {
   const supabase = await createClient()
 
-  // Fetch pitches + deals + entity_tags (joined to tags) in parallel.
-  // RLS gates ownership on all three.
-  const [pitchesResult, dealsResult, tagsResult] = await Promise.all([
+  // Fetch pitches + deals + entity_tags + user in parallel. RLS gates
+  // ownership on the data queries; user.created_at drives the CR-4 pitch
+  // feed differential default state (new-user expanded; returning collapsed).
+  const [pitchesResult, dealsResult, tagsResult, userResult] = await Promise.all([
     supabase
       .from('pitches')
       .select('*')
@@ -18,24 +28,25 @@ export default async function AppPage() {
     supabase.from('deals').select('*'),
     supabase
       .from('entity_tags')
-      .select('ref_id, tags(slug)')
+      .select('ref_id, tags(slug, display_label, axis)')
       .eq('ref_type', 'pitch'),
+    supabase.auth.getUser(),
   ])
 
   const safePitches = (pitchesResult.data ?? []) as Pitch[]
   const safeDeals = (dealsResult.data ?? []) as Deal[]
 
   // CR-2 — group entity_tags by pitch_id (ref_id). Each row is { ref_id, tags }
-  // where tags is the joined { slug } record (single or array depending on
+  // where tags is the joined Tag record (single or array depending on
   // supabase-js resolution at runtime — flatten defensively).
-  const tagsByPitchId: Record<string, string[]> = {}
+  const tagsByPitchId: Record<string, Tag[]> = {}
   for (const row of tagsResult.data ?? []) {
     const refId = (row as { ref_id: string }).ref_id
-    const tagRel = (row as { tags: { slug: string } | { slug: string }[] | null }).tags
+    const tagRel = (row as { tags: Tag | Tag[] | null }).tags
     if (!tagRel) continue
-    const slugs = Array.isArray(tagRel) ? tagRel.map((t) => t.slug) : [tagRel.slug]
+    const rowTags = Array.isArray(tagRel) ? tagRel : [tagRel]
     const bucket = tagsByPitchId[refId] ?? []
-    bucket.push(...slugs)
+    bucket.push(...rowTags)
     tagsByPitchId[refId] = bucket
   }
 
@@ -52,12 +63,29 @@ export default async function AppPage() {
     items.push({
       deal: d,
       pitch: parent,
-      tags: tagsByPitchId[parent.id] ?? [],
+      tags: (tagsByPitchId[parent.id] ?? []).map((t) => t.slug),
     })
   }
 
+  // CR-4 — pitch-feed joined view: every pitch paired with its full Tag[]
+  // (single source of truth for tag-display via existing <TagBadges>).
+  // Sorted desc by created_at (already returned in that order from the
+  // pitches query).
+  const pitchesWithTags: PitchWithTags[] = safePitches.map((p) => ({
+    ...p,
+    tags: tagsByPitchId[p.id] ?? [],
+  }))
+
   const stats = computePitchStats(safePitches, safeDeals)
   const error = pitchesResult.error ?? dealsResult.error ?? tagsResult.error
+
+  // CR-4 AC2.1–2.3 — differential default for the pitch feed expand state.
+  // user fetch is non-blocking for render; on failure we fall back to
+  // expanded (safer than hidden on a transient auth blip).
+  const user = userResult.data?.user
+  const defaultExpanded = user
+    ? isNewUser(user.created_at, safePitches.length)
+    : true
 
   return (
     <div className="page">
@@ -77,7 +105,11 @@ export default async function AppPage() {
       ) : (
         <>
           <StatsStrip stats={stats} />
-          <Kanban items={items} />
+          <AppBoard
+            items={items}
+            pitchesWithTags={pitchesWithTags}
+            defaultExpanded={defaultExpanded}
+          />
         </>
       )}
     </div>
