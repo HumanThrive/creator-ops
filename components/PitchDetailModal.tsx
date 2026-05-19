@@ -7,11 +7,7 @@ import type { Pitch } from '@/lib/types/pitch'
 import type { Deal, DealStage } from '@/lib/types/deal'
 import type { Activity } from '@/lib/types/activity'
 import { useEntityTags } from '@/lib/hooks/useEntityTags'
-import { formatFullDate } from '@/lib/format'
-import {
-  getMockIndustry,
-  getMockSourceSubject,
-} from '@/lib/pitch-mock'
+import { formatFullDate, formatSourceChannel } from '@/lib/format'
 import { Spinner } from './Spinner'
 import { DirIndicator } from './DirIndicator'
 import { FactsStrip } from './pitch-detail/FactsStrip'
@@ -291,6 +287,24 @@ export function PitchDetailModal({
     if (draft.deadline !== pitch.deadline) {
       diffs.deadline = { from: pitch.deadline, to: draft.deadline }
     }
+    if (draft.industry !== pitch.industry) {
+      diffs.industry = { from: pitch.industry, to: draft.industry }
+    }
+    if (draft.sender_email !== pitch.sender_email) {
+      diffs.sender_email = { from: pitch.sender_email, to: draft.sender_email }
+    }
+    if (draft.source_channel !== pitch.source_channel) {
+      diffs.source_channel = {
+        from: pitch.source_channel,
+        to: draft.source_channel,
+      }
+    }
+    if (draft.source_subject !== pitch.source_subject) {
+      diffs.source_subject = {
+        from: pitch.source_subject,
+        to: draft.source_subject,
+      }
+    }
     const { error } = await supabase.rpc('update_pitch_with_activity', {
       p_pitch_id: pitch.id,
       p_brand_name: draft.brand_name,
@@ -304,6 +318,10 @@ export function PitchDetailModal({
       p_ai_summary: pitch.ai_summary,
       p_user_notes: pitch.user_notes,
       p_field_diffs: { field_diffs: diffs },
+      p_industry: draft.industry,
+      p_sender_email: draft.sender_email,
+      p_source_channel: draft.source_channel,
+      p_source_subject: draft.source_subject,
     })
     if (error) throw new Error(error.message)
     setMode('default')
@@ -339,6 +357,10 @@ export function PitchDetailModal({
           user_notes: { from: pitch.user_notes, to: notesDraft },
         },
       },
+      p_industry: pitch.industry,
+      p_sender_email: pitch.sender_email,
+      p_source_channel: pitch.source_channel,
+      p_source_subject: pitch.source_subject,
     })
     if (error) {
       setNotesStatus('idle')
@@ -392,8 +414,10 @@ export function PitchDetailModal({
   const headMetaSegments: string[] = []
   if (isFirstTouch === true) headMetaSegments.push('1st touch')
   else if (isFirstTouch === false) headMetaSegments.push('Repeat')
-  headMetaSegments.push(getMockIndustry(pitch))
-  headMetaSegments.push(`Source: ${getMockSourceSubject(pitch).split(' · ')[0]}`)
+  if (pitch.industry) headMetaSegments.push(pitch.industry)
+  if (pitch.source_channel) {
+    headMetaSegments.push(`Source: ${formatSourceChannel(pitch.source_channel)}`)
+  }
   const headMeta = headMetaSegments.join(' · ')
 
   return (

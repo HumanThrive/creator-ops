@@ -6,7 +6,10 @@ import { createClient } from '@/lib/supabase/client'
 import type {
   ExtractedPitch,
   PitchDirection,
+  PitchSourceChannel,
 } from '@/lib/types/pitch'
+import { PITCH_SOURCE_CHANNELS } from '@/lib/types/pitch'
+import { formatSourceChannel } from '@/lib/format'
 import { ChipSelector, type ChipSelectorOption } from './ChipSelector'
 import { Spinner } from './Spinner'
 
@@ -202,6 +205,10 @@ export function AddPitchModal({
         p_deadline: extracted.deadline,
         p_tag_slugs: tagSlugs,
         p_ai_summary: extracted.summary,
+        p_industry: extracted.industry,
+        p_sender_email: extracted.sender_email,
+        p_source_channel: extracted.source_channel,
+        p_source_subject: extracted.source_subject,
       }
     )
 
@@ -237,6 +244,10 @@ export function AddPitchModal({
           p_ai_summary: extracted.summary,
           p_user_notes: trimmedNotes,
           p_field_diffs: { user_notes: [null, trimmedNotes] },
+          p_industry: extracted.industry,
+          p_sender_email: extracted.sender_email,
+          p_source_channel: extracted.source_channel,
+          p_source_subject: extracted.source_subject,
         }
       )
       if (notesError) {
@@ -439,6 +450,64 @@ export function AddPitchModal({
                   onChange={(e) =>
                     updateField('deadline', e.target.value || null)
                   }
+                />
+              </Field>
+
+              <Field label="Industry">
+                <input
+                  type="text"
+                  className="add-modal-field-input"
+                  value={extracted.industry ?? ''}
+                  onChange={(e) =>
+                    updateField('industry', e.target.value || null)
+                  }
+                  placeholder="e.g. Cookware, Beauty, SaaS"
+                />
+              </Field>
+
+              <Field label="Sender email">
+                <input
+                  type="email"
+                  className="add-modal-field-input"
+                  value={extracted.sender_email ?? ''}
+                  onChange={(e) =>
+                    updateField('sender_email', e.target.value || null)
+                  }
+                  placeholder="priya@brand.co"
+                />
+              </Field>
+
+              <Field label="Source channel">
+                <select
+                  className="add-modal-field-input"
+                  value={extracted.source_channel ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    const next: PitchSourceChannel | null =
+                      v && (PITCH_SOURCE_CHANNELS as readonly string[]).includes(v)
+                        ? (v as PitchSourceChannel)
+                        : null
+                    updateField('source_channel', next)
+                  }}
+                >
+                  <option value="">— None —</option>
+                  {PITCH_SOURCE_CHANNELS.map((c) => (
+                    <option key={c} value={c}>
+                      {formatSourceChannel(c)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Source subject" fullWidth>
+                <input
+                  type="text"
+                  className="add-modal-field-input"
+                  value={extracted.source_subject ?? ''}
+                  onChange={(e) =>
+                    updateField('source_subject', e.target.value || null)
+                  }
+                  placeholder="Email subject line (if any)"
                 />
               </Field>
 

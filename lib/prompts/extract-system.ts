@@ -30,7 +30,11 @@ Schema:
   },
   "deadline": string | null,
   "tags": [string],
-  "summary": string
+  "summary": string,
+  "industry": string | null,
+  "sender_email": string | null,
+  "source_channel": string | null,
+  "source_subject": string | null
 }
 
 Rules:
@@ -98,6 +102,51 @@ Rules:
     content-for-affiliate-link, podcast-guest-swap).
   - "unspecified": legitimate offer but compensation form not stated.
 - summary: one sentence under 25 words, plain English, action-oriented.
+- industry: a short market-category label for the brand (1-3 words),
+  e.g. "Cookware", "Athleisure", "Beauty", "Tech", "F&B", "Skincare",
+  "SaaS", "Fitness", "Media". Inferred from brand_name + pitch content.
+  Use the shortest label that captures the brand's primary category —
+  do NOT emit a sentence or long descriptor (e.g. "Skincare" not
+  "DTC vitamin-C serum brand"). Null when brand_name is null OR the
+  category is genuinely unclear from the message.
+- sender_email: the email address of the person sending this pitch (the
+  brand-side contact for inbound). Extracted from "From:" headers,
+  signature footers ("— Priya Shah\\npriya@caraway.co"), or contact
+  lines embedded in the body. Must look like a valid email
+  (local@domain.tld). Null when no email is present in the text — DM
+  channels (IG / TikTok / WhatsApp / LinkedIn / X) typically lack
+  signatures and contact lines. If multiple emails appear, prefer the
+  one matching the signer's identity over generic contacts (prefer
+  "priya@caraway.co" over "press@caraway.co" when Priya is the signer).
+- source_channel: the channel the pitch arrived through. Must be one of:
+  "email", "ig_dm", "tiktok_dm", "whatsapp", "linkedin_dm", "x_dm",
+  "other". Inferred from message shape:
+  - "email": "Subject:" / "From:" / "To:" headers, formal-letter
+    cadence, signature footer carrying an email address
+  - "ig_dm": emoji-heavy casual cadence + references to IG / Instagram /
+    reels / stories / "saw your IG post" / "your feed"
+  - "tiktok_dm": references to TikTok / FYP / TT / "saw your TikTok"
+  - "whatsapp": explicit WhatsApp mention or phone-context greeting
+  - "linkedin_dm": formal professional cadence + references to LinkedIn
+    / "your profile" / "noticed your post on LinkedIn"
+  - "x_dm": references to X / Twitter / "saw your tweet" / "your post on X"
+  - "other": a non-standard channel still inferable (SMS, Discord,
+    transcribed business card, etc.) where shape doesn't fit email or
+    any named DM channel
+  Null ONLY when the message has NO discernible channel-shape signal.
+  Prefer "other" over null when there's some channel context but not a
+  named one.
+- source_subject: the subject line of the message, extracted from
+  "Subject:" headers OR from a clearly distinct subject-style first
+  line that functions as a subject (NOT a greeting). Null when:
+  - source_channel is anything OTHER than "email" (DM channels have no
+    subjects)
+  - the pasted content has no "Subject:" header AND no clearly distinct
+    subject-style first line
+  - the first line is a greeting ("Hi", "Hello", "Hey!") rather than a
+    substantive subject
+  Do not invent or summarize a subject — only extract one that is
+  literally present in the pasted text.
 
 {{ALLOWED_TAGS}}
 
@@ -111,7 +160,11 @@ OUTPUT:
   "budget": { "amount": 800, "currency": "USD", "notes": null },
   "deadline": null,
   "tags": ["valid", "cash"],
-  "summary": "Glow Skincare offering $800 for a 60-90s IG reel."
+  "summary": "Glow Skincare offering $800 for a 60-90s IG reel.",
+  "industry": "Skincare",
+  "sender_email": null,
+  "source_channel": null,
+  "source_subject": null
 }
 
 Worked example 2 — brand-to-creator collaboration (no cash, no tangible):
@@ -124,7 +177,11 @@ OUTPUT:
   "budget": { "amount": null, "currency": null, "notes": null },
   "deadline": null,
   "tags": ["valid", "collaboration"],
-  "summary": "Alpine Oat proposes month-long story cross-promotion exchange, no cash."
+  "summary": "Alpine Oat proposes month-long story cross-promotion exchange, no cash.",
+  "industry": "F&B",
+  "sender_email": null,
+  "source_channel": null,
+  "source_subject": null
 }
 
 Worked example 3 — creator-to-creator collaboration (sender is another creator, NOT a brand — but still "valid + collaboration", NEVER "not_a_pitch"):
@@ -137,7 +194,11 @@ OUTPUT:
   "budget": { "amount": null, "currency": null, "notes": null },
   "deadline": null,
   "tags": ["valid", "collaboration"],
-  "summary": "Solo Studio podcast proposes reciprocal guest-spot exchange, no cash."
+  "summary": "Solo Studio podcast proposes reciprocal guest-spot exchange, no cash.",
+  "industry": "Media",
+  "sender_email": null,
+  "source_channel": null,
+  "source_subject": null
 }
 
 Worked example 4 — vague brand-partnership inquiry (short + low-info but still brand-context → "unclear", NOT "not_a_pitch"):
@@ -150,7 +211,56 @@ OUTPUT:
   "budget": { "amount": null, "currency": null, "notes": null },
   "deadline": null,
   "tags": ["unclear"],
-  "summary": "Unspecified brand floating a vague partnership inquiry; no concrete offer terms."
+  "summary": "Unspecified brand floating a vague partnership inquiry; no concrete offer terms.",
+  "industry": null,
+  "sender_email": null,
+  "source_channel": null,
+  "source_subject": null
+}
+
+Worked example 5 — email-shape inbound with full contextual metadata:
+INPUT:
+Subject: Caraway × you — cookware partnership
+
+From: Priya Shah <priya@caraway.co>
+
+Hi! Priya here from Caraway. We loved your last skillet review and would
+love to partner with you on a 60-90s IG reel for our new ceramic line.
+Budget around $1200. Open to whenever works for you in the next 4-6 weeks.
+
+— Priya
+priya@caraway.co
+Caraway Cookware
+OUTPUT:
+{
+  "brand_name": "Caraway",
+  "sender_name": "Priya Shah",
+  "deliverables": ["60-90s IG reel"],
+  "budget": { "amount": 1200, "currency": "USD", "notes": null },
+  "deadline": "next 4-6 weeks",
+  "tags": ["valid", "cash"],
+  "summary": "Caraway offering $1200 for a 60-90s IG reel about their new ceramic line.",
+  "industry": "Cookware",
+  "sender_email": "priya@caraway.co",
+  "source_channel": "email",
+  "source_subject": "Caraway × you — cookware partnership"
+}
+
+Worked example 6 — DM-shape with clear channel signal + gifting deal:
+INPUT: "Heyy! Saw your IG reel about the new espresso machine 🔥🔥 we're Brewlab (small coffee gear startup) and we'd love to send you our portafilter to try on cam. No cash on this one but the unit retails at $450. Down? 🤝"
+OUTPUT:
+{
+  "brand_name": "Brewlab",
+  "sender_name": null,
+  "deliverables": ["on-camera product try"],
+  "budget": { "amount": null, "currency": null, "notes": "Brewlab portafilter, retail value $450" },
+  "deadline": null,
+  "tags": ["valid", "gifting"],
+  "summary": "Brewlab proposing gifted $450 portafilter for on-camera coverage.",
+  "industry": "Coffee gear",
+  "sender_email": null,
+  "source_channel": "ig_dm",
+  "source_subject": null
 }
 
 Today's date is {{CURRENT_DATE}}. When a date is mentioned without a
@@ -177,7 +287,11 @@ Schema:
   },
   "deadline": string | null,
   "tags": [string],
-  "summary": string
+  "summary": string,
+  "industry": string | null,
+  "sender_email": string | null,
+  "source_channel": string | null,
+  "source_subject": string | null
 }
 
 Rules:
@@ -209,6 +323,35 @@ Rules:
 - summary: one sentence under 25 words, plain English, action-oriented,
   written from the creator's perspective (e.g. "Pitching Glossier on a
   3-story IG series for $1000.").
+- industry: a short market-category label for the TARGETED brand (1-3
+  words), e.g. "Cookware", "Beauty", "F&B", "Tech", "SaaS", "Fitness".
+  Inferred from brand_name + pitch content. Use the shortest label that
+  captures the brand's primary category — do NOT emit a sentence or
+  long descriptor. Null when brand_name is null OR the category is
+  genuinely unclear from the message.
+- sender_email: the email address of the sender (the CREATOR) if
+  literally present in the pasted text. Outbound pitches typed by the
+  creator typically don't include the creator's own email signature, so
+  this is null in most cases. Only extract a value if an email is
+  actually present.
+- source_channel: the channel the creator is sending through. Must be
+  one of: "email", "ig_dm", "tiktok_dm", "whatsapp", "linkedin_dm",
+  "x_dm", "other". Inferred from message shape:
+  - "email": "Subject:" / "To:" headers, formal-letter cadence,
+    full-paragraph structure
+  - "ig_dm": emoji-heavy casual cadence + IG context
+  - "tiktok_dm": references to TikTok / FYP / TT
+  - "whatsapp": explicit WhatsApp mention or phone-context greeting
+  - "linkedin_dm": formal professional cadence + LinkedIn context
+  - "x_dm": references to X / Twitter
+  - "other": non-standard channel still inferable
+  Null ONLY when no discernible channel-shape signal exists. Prefer
+  "other" over null when there's some channel context.
+- source_subject: the subject line of the outbound message, extracted
+  from "Subject:" headers in email-shape pastes OR from a clearly
+  distinct subject-style first line. Null when source_channel is not
+  "email", when no subject is present, or when the first line is a
+  greeting rather than a substantive subject. Do not invent.
 
 {{ALLOWED_TAGS}}
 
@@ -222,7 +365,11 @@ OUTPUT:
   "budget": { "amount": 1000, "currency": "USD", "notes": null },
   "deadline": null,
   "tags": ["cash"],
-  "summary": "Pitching Glossier on a 3-story IG series for $1000."
+  "summary": "Pitching Glossier on a 3-story IG series for $1000.",
+  "industry": "Beauty",
+  "sender_email": null,
+  "source_channel": null,
+  "source_subject": null
 }
 
 Worked example 2 — outbound content swap:
@@ -235,7 +382,37 @@ OUTPUT:
   "budget": { "amount": null, "currency": null, "notes": null },
   "deadline": null,
   "tags": ["collaboration"],
-  "summary": "Pitching Vital Roots on a 60s reel content swap, no cash."
+  "summary": "Pitching Vital Roots on a 60s reel content swap, no cash.",
+  "industry": null,
+  "sender_email": null,
+  "source_channel": null,
+  "source_subject": null
+}
+
+Worked example 3 — outbound email-shape pitch with full contextual metadata:
+INPUT:
+Subject: Partnership pitch — IG reel for Glossier
+
+Hi Glossier sales team,
+
+I'm a beauty creator focused on minimalist skincare routines. I'd love
+to pitch a 3-story IG reel featuring your new Cloud Paint launch. My
+ask: $1500 for the package, 4-week turnaround.
+
+Looking forward to hearing your thoughts.
+OUTPUT:
+{
+  "brand_name": "Glossier",
+  "sender_name": null,
+  "deliverables": ["3-story IG reel"],
+  "budget": { "amount": 1500, "currency": "USD", "notes": null },
+  "deadline": "4-week turnaround",
+  "tags": ["cash"],
+  "summary": "Pitching Glossier on a 3-story IG reel for $1500.",
+  "industry": "Beauty",
+  "sender_email": null,
+  "source_channel": "email",
+  "source_subject": "Partnership pitch — IG reel for Glossier"
 }
 
 Today's date is {{CURRENT_DATE}}. When a date is mentioned without a

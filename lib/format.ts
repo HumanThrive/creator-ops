@@ -1,5 +1,29 @@
 // Tiny formatting helpers shared across the CRM surface.
 
+import type { PitchSourceChannel } from './types/pitch'
+
+const SOURCE_CHANNEL_LABELS: Record<PitchSourceChannel, string> = {
+  email: 'Email',
+  ig_dm: 'IG DM',
+  tiktok_dm: 'TikTok DM',
+  whatsapp: 'WhatsApp',
+  linkedin_dm: 'LinkedIn DM',
+  x_dm: 'X DM',
+  other: 'Other',
+}
+
+/**
+ * FR-6 2026-05-19 — display label for pitches.source_channel.
+ * NULL renders as em-dash `—` (CR-6 NULL-fallback convention); unknown
+ * non-null values fall through to the raw string so a legacy/un-typed value
+ * never leaks `undefined` to the UI.
+ */
+export function formatSourceChannel(channel: string | null): string {
+  if (!channel) return '—'
+  return SOURCE_CHANNEL_LABELS[channel as PitchSourceChannel] ?? channel
+}
+
+
 const MS_PER_DAY = 1000 * 60 * 60 * 24
 
 export function formatRelativeTime(iso: string, now: Date = new Date()): string {

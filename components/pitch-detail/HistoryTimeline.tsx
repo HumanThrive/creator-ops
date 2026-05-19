@@ -1,8 +1,11 @@
 import type { Activity } from '@/lib/types/activity'
 import type { Pitch } from '@/lib/types/pitch'
 import { formatActivityEvent } from '@/lib/activity-format'
-import { formatFullDate, formatTodayRelativeElseFullDate } from '@/lib/format'
-import { getMockSenderEmail, getMockSourceSubject } from '@/lib/pitch-mock'
+import {
+  formatFullDate,
+  formatSourceChannel,
+  formatTodayRelativeElseFullDate,
+} from '@/lib/format'
 
 interface HistoryTimelineProps {
   pitch: Pitch
@@ -24,8 +27,11 @@ export function HistoryTimeline({
   const ordered = [...activities].sort(
     (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
   )
-  const sourceSubject = getMockSourceSubject(pitch)
-  const senderEmail = getMockSenderEmail(pitch)
+  const sourceSubject = pitch.source_subject
+  const senderEmail = pitch.sender_email
+  const sourceChannelLabel = pitch.source_channel
+    ? formatSourceChannel(pitch.source_channel)
+    : null
 
   return (
     <section className="pdetail-cr8-section">
@@ -87,8 +93,18 @@ export function HistoryTimeline({
                         </span>
                       ) : null}
                     </dd>
-                    <dt>Subject</dt>
-                    <dd>&quot;{sourceSubject}&quot;</dd>
+                    {sourceSubject ? (
+                      <>
+                        <dt>Subject</dt>
+                        <dd>&quot;{sourceSubject}&quot;</dd>
+                      </>
+                    ) : null}
+                    {sourceChannelLabel ? (
+                      <>
+                        <dt>Received via</dt>
+                        <dd>{sourceChannelLabel}</dd>
+                      </>
+                    ) : null}
                     <dt>Received</dt>
                     <dd className="is-mono">{formatFullDate(pitch.created_at)}</dd>
                   </dl>

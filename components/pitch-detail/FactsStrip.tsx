@@ -1,13 +1,12 @@
 import type { Pitch } from '@/lib/types/pitch'
 import { formatRelativeTime } from '@/lib/format'
-import { getMockSenderEmail } from '@/lib/pitch-mock'
 
 interface FactsStripProps {
   pitch: Pitch
 }
 
 export function FactsStrip({ pitch }: FactsStripProps) {
-  const senderEmail = getMockSenderEmail(pitch)
+  const senderEmail = pitch.sender_email
   const hasSender = Boolean(pitch.sender_name || senderEmail)
   const hasDeadline = Boolean(pitch.deadline)
   if (!hasSender && !hasDeadline) return null

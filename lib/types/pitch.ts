@@ -1,5 +1,20 @@
 export type PitchDirection = 'inbound' | 'outbound'
 
+// FR-6 — closed-set source-channel slugs, mirroring the
+// `pitches_source_channel_check` CHECK constraint (Migration M1, 2026-05-19).
+// Runtime array enables `/api/extract` boundary validation; the union type
+// provides compile-time discipline at consuming surfaces.
+export const PITCH_SOURCE_CHANNELS = [
+  'email',
+  'ig_dm',
+  'tiktok_dm',
+  'whatsapp',
+  'linkedin_dm',
+  'x_dm',
+  'other',
+] as const
+export type PitchSourceChannel = typeof PITCH_SOURCE_CHANNELS[number]
+
 // CR-2 — closed-set pitch tag slugs, derived from `tags WHERE scope='pitch'`
 // seed (Migration 1, 2026-05-17). Mirrors the 9 seed rows: 5 legitimacy
 // (single-select axis) + 4 compensation (multi-select axis).
@@ -34,6 +49,10 @@ export interface Pitch {
   budget_notes: string | null
   deadline: string | null
   ai_summary: string | null
+  industry: string | null
+  sender_email: string | null
+  source_channel: PitchSourceChannel | null
+  source_subject: string | null
   user_notes: string | null
   created_at: string
   updated_at: string
@@ -55,4 +74,9 @@ export interface ExtractedPitch {
   // for outbound pitches per AC1.4).
   tags: string[]
   summary: string
+  // FR-6 — pitch-context metadata extracted from raw text
+  industry: string | null
+  sender_email: string | null
+  source_channel: PitchSourceChannel | null
+  source_subject: string | null
 }

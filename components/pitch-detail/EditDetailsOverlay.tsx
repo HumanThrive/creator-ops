@@ -2,12 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { Pitch } from '@/lib/types/pitch'
-import {
-  getMockIndustry,
-  getMockSenderEmail,
-  getMockSourceSubject,
-} from '@/lib/pitch-mock'
+import type { Pitch, PitchSourceChannel } from '@/lib/types/pitch'
+import { PITCH_SOURCE_CHANNELS } from '@/lib/types/pitch'
+import { formatSourceChannel } from '@/lib/format'
 
 export interface PitchEditDraft {
   brand_name: string | null
@@ -16,6 +13,10 @@ export interface PitchEditDraft {
   budget_amount: number | null
   budget_currency: string | null
   deadline: string | null
+  industry: string | null
+  sender_email: string | null
+  source_channel: PitchSourceChannel | null
+  source_subject: string | null
 }
 
 interface EditDetailsOverlayProps {
@@ -59,10 +60,11 @@ export function EditDetailsOverlay({
   const [deadline, setDeadline] = useState(pitch.deadline ?? '')
   const [deliverables, setDeliverables] = useState<string[]>([...pitch.deliverables])
 
-  // Mock fields — Founder Option B 2026-05-19: live editable, silently discard on save.
-  const [industry, setIndustry] = useState(getMockIndustry(pitch))
-  const [senderEmail, setSenderEmail] = useState(getMockSenderEmail(pitch) ?? '')
-  const [sourceSubject, setSourceSubject] = useState(getMockSourceSubject(pitch))
+  // FR-6 real fields — persist via update_pitch_with_activity on save.
+  const [industry, setIndustry] = useState(pitch.industry ?? '')
+  const [senderEmail, setSenderEmail] = useState(pitch.sender_email ?? '')
+  const [sourceSubject, setSourceSubject] = useState(pitch.source_subject ?? '')
+  const [sourceChannel, setSourceChannel] = useState<string>(pitch.source_channel ?? '')
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -88,6 +90,13 @@ export function EditDetailsOverlay({
     setSaving(true)
     setError(null)
     const { amount, currency } = parseBudgetInput(budget)
+    // source_channel: empty → null; non-empty validated against the closed
+    // set (defense in depth; the <select> only emits these values, but
+    // guards against accidental shape drift).
+    const sourceChannelValue: PitchSourceChannel | null =
+      sourceChannel && (PITCH_SOURCE_CHANNELS as readonly string[]).includes(sourceChannel)
+        ? (sourceChannel as PitchSourceChannel)
+        : null
     try {
       await onSaveRequest({
         brand_name: brand.trim() || null,
@@ -96,6 +105,10 @@ export function EditDetailsOverlay({
         budget_amount: amount,
         budget_currency: currency,
         deadline: deadline.trim() || null,
+        industry: industry.trim() || null,
+        sender_email: senderEmail.trim() || null,
+        source_channel: sourceChannelValue,
+        source_subject: sourceSubject.trim() || null,
       })
       // Parent closes the overlay after a successful save + refetch.
     } catch (err) {
@@ -178,12 +191,28 @@ export function EditDetailsOverlay({
               />
             </div>
 
-            <div className="pdetail-cr8-overlay-field span-2">
-              <label className="pdetail-cr8-overlay-field-l">Source · subject line</label>
+            <div className="pdetail-cr8-overlay-field">
+              <label className="pdetail-cr8-overlay-field-l">Source channel</label>
+              <select
+                className="pdetail-cr8-overlay-input"
+                value={sourceChannel}
+                onChange={(e) => setSourceChannel(e.target.value)}
+              >
+                <option value="">— None —</option>
+                {PITCH_SOURCE_CHANNELS.map((c) => (
+                  <option key={c} value={c}>
+                    {formatSourceChannel(c)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="pdetail-cr8-overlay-field">
+              <label className="pdetail-cr8-overlay-field-l">Source subject</label>
               <input
                 className="pdetail-cr8-overlay-input"
                 value={sourceSubject}
                 onChange={(e) => setSourceSubject(e.target.value)}
+                placeholder="Email subject line (if any)"
               />
             </div>
 
