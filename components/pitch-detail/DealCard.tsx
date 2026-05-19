@@ -325,15 +325,36 @@ export function DealCard({
               ) : (
                 <span className="pdetail-cr8-stat-v is-empty">Not stated</span>
               )}
-              {askBudget && dealBudget && askBudget !== dealBudget ? (
-                <span className="pdetail-cr8-stat-was is-accent">
-                  was <b>{askBudget}</b>
-                </span>
-              ) : askBudget && dealBudget === askBudget ? (
-                <span className="pdetail-cr8-stat-was">
-                  Matches ask · was <b>{askBudget}</b>
-                </span>
-              ) : null}
+              {(() => {
+                const askAmt = pitch.budget_amount
+                const dealAmt = deal.current_budget_amount
+                if (askAmt == null || dealAmt == null) {
+                  return askBudget && dealBudget ? (
+                    <span className="pdetail-cr8-stat-was">
+                      was <b>{askBudget}</b>
+                    </span>
+                  ) : null
+                }
+                const delta = dealAmt - askAmt
+                if (delta === 0) {
+                  return (
+                    <span className="pdetail-cr8-stat-was">
+                      Matches ask · was <b>{askBudget}</b>
+                    </span>
+                  )
+                }
+                const arrow = delta > 0 ? '↑' : '↓'
+                const variant = delta > 0 ? 'is-up' : 'is-down'
+                const absFmt = formatMoney(
+                  Math.abs(delta),
+                  deal.current_budget_currency ?? pitch.budget_currency,
+                )
+                return (
+                  <span className={`pdetail-cr8-stat-was ${variant}`}>
+                    {arrow} <b>{absFmt}</b> from ask
+                  </span>
+                )
+              })()}
             </div>
             <div className="pdetail-cr8-stat">
               <span className="pdetail-cr8-stat-l">Deliverables</span>

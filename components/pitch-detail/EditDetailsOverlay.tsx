@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { Pitch } from '@/lib/types/pitch'
 import {
   getMockIndustry,
@@ -65,15 +66,23 @@ export function EditDetailsOverlay({
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isExiting, setIsExiting] = useState(false)
+
+  function requestClose() {
+    if (isExiting || saving) return
+    setIsExiting(true)
+    setTimeout(() => onClose(), 180)
+  }
 
   // Esc to close.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !saving) onClose()
+      if (e.key === 'Escape') requestClose()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [onClose, saving])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function handleSave() {
     setSaving(true)
@@ -95,9 +104,18 @@ export function EditDetailsOverlay({
     }
   }
 
-  return (
-    <div className="pdetail-cr8-overlay-host">
-      <div className="pdetail-cr8-overlay-dim" onClick={onClose} />
+  // Portal out of the parent modal's DOM tree. The parent `.pdetail-scrim`
+  // applies `backdrop-filter: blur(2px)`, which (per CSS spec) creates a
+  // containing block for `position: fixed` descendants — turning our overlay
+  // into effectively absolute-positioned and making it scroll with the parent
+  // scrim's overflow. Portaling to document.body escapes that trap.
+  if (typeof window === 'undefined') return null
+
+  return createPortal(
+    <div
+      className={`pdetail-cr8-overlay-host${isExiting ? ' is-exiting' : ''}`}
+    >
+      <div className="pdetail-cr8-overlay-dim" onClick={requestClose} />
       <div className="pdetail-cr8-overlay-modal" role="dialog" aria-modal="true">
         <header className="pdetail-cr8-overlay-head">
           <h2 className="pdetail-cr8-overlay-h">
@@ -218,7 +236,7 @@ export function EditDetailsOverlay({
             <button
               type="button"
               className="pdetail-cr8-overlay-cancel"
-              onClick={onClose}
+              onClick={requestClose}
               disabled={saving}
             >
               Cancel
@@ -234,6 +252,7 @@ export function EditDetailsOverlay({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

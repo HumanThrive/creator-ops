@@ -29,6 +29,13 @@
   --line-board: #DDE0E9;
   --slate-edge: #9CA3AF;
 
+  /* Delta direction tokens (CR-6 2026-05-19). Used for budget-changed sub-hints
+     in Deal cards: green = favorable shift (budget up), red = unfavorable shift
+     (budget down). Distinct from --accent (spike red, used as a point/highlight
+     marker, not a semantic direction). Point usage only — never a fill. */
+  --delta-up: #16A34A;
+  --delta-down: #B91C1C;
+
   /* Font stacks — each next/font variable provides the primary face;
      fallback chain catches the brief moment before the self-hosted
      font is ready, plus environments where the variable isn't set
@@ -3893,11 +3900,19 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .feed-tags-wrap {
+  /* CR-6 hotfix 2026-05-19: was `overflow: hidden` + `flex-wrap: nowrap`
+     which clipped the first chip when tags exceeded the column width
+     (visually trimmed pill on the left). Switched to wrap so excess
+     tags break to a new line; row grows taller as needed. Right-
+     aligned via flex-end so the wrapped second line hugs the column's
+     right edge for visual continuity. */
   display: flex; justify-content: flex-end; align-items: center;
-  overflow: hidden;
 }
 .feed-tags-wrap .tag-badges {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  row-gap: 4px;
 }
 .feed-arrow {
   font-family: var(--mono); font-size: 14px;
@@ -4098,6 +4113,16 @@
   color: var(--accent); font-style: normal; font-weight: 500;
 }
 .pdetail-cr8-stat-was.is-accent b { color: var(--accent); font-weight: 600; }
+/* CR-6 2026-05-19 — semantic delta variants for budget direction. Green for
+   favorable shift (budget up); red for unfavorable shift (budget down). */
+.pdetail-cr8-stat-was.is-up {
+  color: var(--delta-up); font-style: normal; font-weight: 500;
+}
+.pdetail-cr8-stat-was.is-up b { color: var(--delta-up); font-weight: 600; }
+.pdetail-cr8-stat-was.is-down {
+  color: var(--delta-down); font-style: normal; font-weight: 500;
+}
+.pdetail-cr8-stat-was.is-down b { color: var(--delta-down); font-weight: 600; }
 .pdetail-cr8-stat-tags {
   display: flex; flex-direction: column; gap: 6px;
 }
@@ -4239,6 +4264,11 @@
 /* History — timeline of events, newest first */
 .pdetail-cr8-history-list {
   display: flex; flex-direction: column;
+  /* CR-6 2026-05-19 — cap height + scroll internally so the modal doesn't
+     grow indefinitely with high-activity pitches (30-40 events). 420px
+     fits ~7-8 events; older events accessible via internal scroll. */
+  max-height: 420px;
+  overflow-y: auto;
 }
 .pdetail-cr8-event {
   display: grid;
@@ -4636,14 +4666,25 @@
 
 /* Edit-details — overlay modal stacked on top of CR-8 (artboard mock) */
 .pdetail-cr8-overlay-host {
-  position: relative;
+  /* CR-6 hotfix 2026-05-19: was `position: relative` which made the overlay
+     sit inside its mount point (below the PitchDetailModal in DOM order).
+     Switched to `position: fixed` + `z-index: 50` (above .pdetail-scrim's
+     z-index: 30) so the edit-details overlay stacks above the parent modal
+     regardless of mount location. */
+  position: fixed; inset: 0;
   isolation: isolate;
+  z-index: 50;
+  animation: pdetail-fade-in 180ms ease-out;
+}
+.pdetail-cr8-overlay-host.is-exiting {
+  animation: pdetail-fade-out 180ms ease-in forwards;
 }
 .pdetail-cr8-overlay-dim {
+  /* Removed `pointer-events: none` so clicking the dim closes the overlay
+     (the host attaches onClick to this layer). */
   position: absolute; inset: 0;
   background: rgba(10, 10, 10, 0.42);
   z-index: 1;
-  pointer-events: none;
 }
 .pdetail-cr8-overlay-modal {
   position: absolute;
@@ -4874,13 +4915,28 @@
 
 /* CR-6 base modal frame (lifted from design source) */
 .pdetail-scrim {
-  position: absolute; inset: 0;
+  /* CR-6 hotfix 2026-05-19: `position: fixed` (was `absolute`) so the
+     dim background locks to viewport and doesn't scroll out of view
+     when the page behind is taller than the viewport. */
+  position: fixed; inset: 0;
   background: color-mix(in oklab, var(--ink) 38%, transparent);
   backdrop-filter: blur(2px);
   display: flex; align-items: flex-start; justify-content: center;
   padding: 60px 28px 28px;
   z-index: 30;
   overflow-y: auto;
+  animation: pdetail-fade-in 180ms ease-out;
+}
+.pdetail-scrim.is-exiting {
+  animation: pdetail-fade-out 180ms ease-in forwards;
+}
+@keyframes pdetail-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pdetail-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 .pdetail {
   background: var(--paper);

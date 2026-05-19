@@ -1,7 +1,7 @@
 import type { Activity } from '@/lib/types/activity'
 import type { Pitch } from '@/lib/types/pitch'
 import { formatActivityEvent } from '@/lib/activity-format'
-import { formatFullDate } from '@/lib/format'
+import { formatFullDate, formatTodayRelativeElseFullDate } from '@/lib/format'
 import { getMockSenderEmail, getMockSourceSubject } from '@/lib/pitch-mock'
 
 interface HistoryTimelineProps {
@@ -48,7 +48,7 @@ export function HistoryTimeline({
               }
             >
               <span className="pdetail-cr8-event-d">
-                {formatFullDate(a.created_at)}
+                {formatTodayRelativeElseFullDate(a.created_at)}
               </span>
               <span className="pdetail-cr8-event-body">
                 <b>{event.label}</b>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Pitch } from '@/lib/types/pitch'
@@ -45,9 +45,41 @@ export function PitchDetailModal({
   const [deal, setDeal] = useState<Deal | null | undefined>(undefined)
   const [activities, setActivities] = useState<Activity[]>([])
   const [notesDraft, setNotesDraft] = useState(pitch.user_notes ?? '')
-  const [notesSaving, setNotesSaving] = useState(false)
+  const [notesStatus, setNotesStatus] = useState<'idle' | 'saving' | 'saved'>(
+    'idle',
+  )
+  const notesSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [advanceWorking, setAdvanceWorking] = useState(false)
+  const [isExiting, setIsExiting] = useState(false)
+  const scrimRef = useRef<HTMLDivElement>(null)
+
+  // Exit animation: set is-exiting class on the scrim, wait for CSS animation
+  // to finish, then call parent onClose to unmount.
+  function requestClose() {
+    if (isExiting) return
+    setIsExiting(true)
+    setTimeout(() => onClose(), 180)
+  }
+
+  // Body scroll lock — prevent the underlying /app page from scrolling while
+  // the modal is open. Restored on unmount.
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
+
+  // Smooth-scroll the scrim to top when entering edit-details mode. Without
+  // this, if the user scrolled deep into the History timeline before clicking
+  // "Edit details," the overlay opens above the viewport and is invisible.
+  useEffect(() => {
+    if (mode === 'edit-details' && scrimRef.current) {
+      scrimRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [mode])
 
   const { tags, setTags } = useEntityTags('pitch', pitch.id)
   const legitimacy: LegitimacyVariant | null = pickLegitimacy(
@@ -113,11 +145,12 @@ export function PitchDetailModal({
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && mode !== 'edit-details') onClose()
+      if (e.key === 'Escape' && mode !== 'edit-details') requestClose()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [onClose, mode])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
 
   // ───────────────── RPC handlers ─────────────────
   async function handleStartTrackingDeal() {
@@ -128,19 +161,20 @@ export function PitchDetailModal({
       p_current_budget_currency: pitch.budget_currency,
       p_current_deliverables: pitch.deliverables,
       p_current_scope_notes: null,
-      p_seeded_from: 'manual_recover',
     })
     if (error) {
       console.error('[PitchDetailModal] create_deal failed:', error.message)
       return
     }
     await Promise.all([fetchDeal(), fetchActivities()])
+    router.refresh()
   }
 
   async function handleStageChange(next: DealStage) {
     if (!deal) return
     const { error } = await supabase.rpc('change_deal_stage_with_activity', {
       p_deal_id: deal.id,
+      p_from_stage: deal.stage,
       p_to_stage: next,
     })
     if (error) {
@@ -148,6 +182,7 @@ export function PitchDetailModal({
       return
     }
     await Promise.all([fetchDeal(), fetchActivities()])
+    router.refresh()
   }
 
   async function handleSaveDeal(draft: DealCardDraft) {
@@ -196,6 +231,7 @@ export function PitchDetailModal({
       throw new Error(error.message)
     }
     await Promise.all([fetchDeal(), fetchActivities()])
+    router.refresh()
     setMode('default')
   }
 
@@ -208,6 +244,7 @@ export function PitchDetailModal({
     try {
       await setTags(nextSlugs)
       await fetchActivities()
+      router.refresh()
     } catch {
       /* useEntityTags owns the error surface */
     }
@@ -221,6 +258,7 @@ export function PitchDetailModal({
     try {
       await setTags([legSlug, ...next])
       await fetchActivities()
+      router.refresh()
     } catch {
       /* hook owns the surface */
     }
@@ -272,9 +310,17 @@ export function PitchDetailModal({
     router.refresh()
   }
 
+  // Cleanup the 3-second "Saved" timer on unmount so a stale callback doesn't
+  // try to setState on an unmounted component.
+  useEffect(() => {
+    return () => {
+      if (notesSavedTimerRef.current) clearTimeout(notesSavedTimerRef.current)
+    }
+  }, [])
+
   async function handleNotesBlur() {
     if (notesDraft === (pitch.user_notes ?? '')) return
-    setNotesSaving(true)
+    setNotesStatus('saving')
     const tagSlugs = tags.map((t) => t.slug)
     const { error } = await supabase.rpc('update_pitch_with_activity', {
       p_pitch_id: pitch.id,
@@ -294,11 +340,17 @@ export function PitchDetailModal({
         },
       },
     })
-    setNotesSaving(false)
     if (error) {
+      setNotesStatus('idle')
       console.error('[PitchDetailModal] notes save failed:', error.message)
       return
     }
+    setNotesStatus('saved')
+    if (notesSavedTimerRef.current) clearTimeout(notesSavedTimerRef.current)
+    notesSavedTimerRef.current = setTimeout(() => {
+      setNotesStatus('idle')
+      notesSavedTimerRef.current = null
+    }, 3000)
     await fetchActivities()
     router.refresh()
   }
@@ -312,7 +364,7 @@ export function PitchDetailModal({
       console.error('[PitchDetailModal] delete failed:', error.message)
       return
     }
-    onClose()
+    requestClose()
     router.refresh()
   }
 
@@ -345,7 +397,11 @@ export function PitchDetailModal({
   const headMeta = headMetaSegments.join(' · ')
 
   return (
-    <div className="pdetail-scrim" onClick={onClose}>
+    <div
+      ref={scrimRef}
+      className={`pdetail-scrim${isExiting ? ' is-exiting' : ''}`}
+      onClick={requestClose}
+    >
       <div
         className="pdetail"
         role="dialog"
@@ -361,11 +417,11 @@ export function PitchDetailModal({
           </div>
           <button
             type="button"
-            className="pitch-modal-close"
-            onClick={onClose}
+            className="pdetail-close"
+            onClick={requestClose}
             aria-label="Close"
           >
-            ✕
+            Close <span className="x" aria-hidden>✕</span>
           </button>
         </div>
 
@@ -386,8 +442,16 @@ export function PitchDetailModal({
         <FactsStrip pitch={pitch} />
 
         {loading ? (
-          <div style={{ padding: '40px 32px', display: 'flex', justifyContent: 'center' }}>
-            <Spinner />
+          <div
+            style={{
+              padding: '60px 32px',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              color: 'var(--ink-3)',
+            }}
+          >
+            <Spinner className="w-8 h-8" />
           </div>
         ) : isSimpleNoDeal ? (
           <section className="pdetail-cr8-section">
@@ -420,8 +484,15 @@ export function PitchDetailModal({
         <section className="pdetail-cr8-section">
           <div className="pdetail-cr8-section-l">
             Your notes
-            {notesSaving ? (
+            {notesStatus === 'saving' ? (
               <span className="pdetail-cr8-section-l-meta">Saving…</span>
+            ) : notesStatus === 'saved' ? (
+              <span
+                className="pdetail-cr8-section-l-meta"
+                style={{ color: 'var(--delta-up)' }}
+              >
+                Saved ✓
+              </span>
             ) : null}
           </div>
           <textarea

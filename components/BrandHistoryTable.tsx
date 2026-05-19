@@ -7,7 +7,7 @@ import type { Activity } from '@/lib/types/activity'
 import { StageChip } from '@/components/StageChip'
 import { PitchDetailModal } from '@/components/PitchDetailModal'
 import { formatFullDate, formatRelativeTime } from '@/lib/format'
-import { formatCurrencyAmount } from '@/lib/pitch-stats'
+import { effectiveBudget, formatCurrencyAmount } from '@/lib/pitch-stats'
 import { formatActivityLabel } from '@/lib/activity-format'
 
 interface BrandHistoryTableProps {
@@ -86,7 +86,7 @@ export function BrandHistoryTable({
                 ) : (
                   <span className="history-amt muted">No deal</span>
                 )}
-                <CashCell pitch={p} />
+                <CashCell pitch={p} deal={deal} />
                 <span className="history-summary">{p.ai_summary ?? '—'}</span>
                 <span className="history-arrow">→</span>
               </div>
@@ -133,14 +133,15 @@ export function BrandHistoryTable({
   )
 }
 
-function CashCell({ pitch }: { pitch: Pitch }) {
-  if (!pitch.budget_amount || pitch.budget_amount <= 0 || !pitch.budget_currency) {
+function CashCell({ pitch, deal }: { pitch: Pitch; deal: Deal | undefined }) {
+  // CR-6: per-pitch row prefers deal.current_budget_amount over pitch ask.
+  const eff = effectiveBudget(pitch, deal)
+  if (!eff) {
     return <span className="history-amt muted">—</span>
   }
-  const currency = pitch.budget_currency.trim().toUpperCase()
   return (
     <span className="history-amt">
-      {formatCurrencyAmount(currency, pitch.budget_amount)} {currency}
+      {formatCurrencyAmount(eff.currency, eff.amount)} {eff.currency}
     </span>
   )
 }

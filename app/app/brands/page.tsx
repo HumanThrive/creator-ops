@@ -24,7 +24,7 @@ export default async function BrandsPage() {
   const safePitches = (pitchesResult.data ?? []) as Pitch[]
   const safeDeals = (dealsResult.data ?? []) as Deal[]
   const stats = computePitchStats(safePitches, safeDeals)
-  const brands = computeBrandSummaries(safePitches)
+  const brands = computeBrandSummaries(safePitches, safeDeals)
   const error = pitchesResult.error ?? dealsResult.error
 
   const isEmpty = brands.known.length === 0 && brands.unknown === null

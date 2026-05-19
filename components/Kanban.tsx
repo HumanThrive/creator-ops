@@ -131,7 +131,14 @@ export function Kanban({ items, direction, onDirectionChange }: KanbanProps) {
               <div className="col-cards">
                 {colItems.length === 0 && stage === 'inbox' && (
                   <p className="font-mono text-xs text-ink-4">
-                    No deals yet. Add a pitch to start →
+                    {/* CR-6 2026-05-19 — split inbox empty state. Onboarding
+                        message stays when there are zero deals in the active
+                        direction filter. Once any other column has a deal,
+                        the inbox-empty state is a positive signal (you've
+                        processed incoming) — soften to "Inbox clear". */}
+                    {filtered.length === 0
+                      ? 'No deals yet. Add a pitch to start →'
+                      : 'Inbox clear.'}
                   </p>
                 )}
                 {colItems.map((item) => (

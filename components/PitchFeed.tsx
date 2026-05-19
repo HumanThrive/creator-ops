@@ -5,7 +5,7 @@ import type { Tag } from '@/lib/hooks/useEntityTags'
 import type { DirectionFilter } from './Kanban'
 import { TagBadges } from './TagBadges'
 import { DirIndicator } from './DirIndicator'
-import { formatRelativeTime } from '@/lib/format'
+import { formatRelativeTimeFine } from '@/lib/format'
 
 // Pitch joined with its entity_tags rows. Built server-side in page.tsx
 // from the existing entity_tags fetch — symmetric with Kanban's
@@ -94,7 +94,7 @@ function FeedRow({
   onClick: () => void
 }) {
   const brandKnown = !!pitch.brand_name
-  const ts = formatRelativeTime(pitch.created_at)
+  const ts = formatRelativeTimeFine(pitch.created_at)
   // ts + dir render twice — once as direct grid children (desktop grid)
   // and once wrapped in `.feed-meta` (mobile 3-row stack via container
   // query). CSS toggles visibility per breakpoint. Design canon.

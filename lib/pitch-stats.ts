@@ -32,6 +32,34 @@ function normalizeCurrency(c: string | null): string | null {
   return trimmed || null
 }
 
+/**
+ * CR-6 2026-05-19 — "Deal IS the thing." Brand-page aggregations (per-brand
+ * totals, lifetime totals, avg-deal, per-pitch CashCell) prefer the negotiated
+ * deal value over the original pitch ask. Falls back to pitch.budget_* when no
+ * deal exists OR the deal hasn't set a budget yet. Rejected-stage deals still
+ * count as "engaged on" — historical track record, not current pipeline.
+ */
+export function effectiveBudget(
+  pitch: Pitch,
+  deal: Deal | null | undefined,
+): { amount: number; currency: string } | null {
+  if (deal && deal.current_budget_amount && deal.current_budget_amount > 0) {
+    const c = normalizeCurrency(deal.current_budget_currency)
+    if (c) return { amount: deal.current_budget_amount, currency: c }
+  }
+  if (pitch.budget_amount && pitch.budget_amount > 0) {
+    const c = normalizeCurrency(pitch.budget_currency)
+    if (c) return { amount: pitch.budget_amount, currency: c }
+  }
+  return null
+}
+
+function buildDealMap(deals: Deal[]): Map<string, Deal> {
+  const m = new Map<string, Deal>()
+  for (const d of deals) m.set(d.pitch_id, d)
+  return m
+}
+
 export function computePitchStats(
   pitches: Pitch[],
   deals: Deal[]
@@ -46,13 +74,15 @@ export function computePitchStats(
     if (k) brandKeys.add(k)
   }
 
-  // Lifetime currency totals — sum pitches.budget_amount (original offers).
-  // Used for /app/brands aggregate "Total tracked" display.
+  // Lifetime currency totals — effective budget per pitch (deal value when
+  // negotiated, pitch.budget_amount fallback). Used for /app/brands tools-row
+  // "$X TRACKED" line.
+  const dealMap = buildDealMap(deals)
   const lifetimeSums = new Map<string, number>()
   for (const p of pitches) {
-    const c = normalizeCurrency(p.budget_currency)
-    if (!c || !p.budget_amount || p.budget_amount <= 0) continue
-    lifetimeSums.set(c, (lifetimeSums.get(c) ?? 0) + p.budget_amount)
+    const eff = effectiveBudget(p, dealMap.get(p.id))
+    if (!eff) continue
+    lifetimeSums.set(eff.currency, (lifetimeSums.get(eff.currency) ?? 0) + eff.amount)
   }
   const currencyTotals: CurrencyTotal[] = Array.from(lifetimeSums.entries())
     .map(([currency, amount]) => ({ currency, amount }))
@@ -99,7 +129,11 @@ export interface BrandSummaries {
 
 const UNKNOWN_KEY = '__unknown__'
 
-export function computeBrandSummaries(pitches: Pitch[]): BrandSummaries {
+export function computeBrandSummaries(
+  pitches: Pitch[],
+  deals: Deal[],
+): BrandSummaries {
+  const dealMap = buildDealMap(deals)
   // Group pitches by normalized brand key (or unknown bucket for NULL brand_name).
   const groups = new Map<string, Pitch[]>()
   for (const p of pitches) {
@@ -125,9 +159,9 @@ export function computeBrandSummaries(pitches: Pitch[]): BrandSummaries {
 
     const sumsByCurrency = new Map<string, number>()
     for (const p of groupPitches) {
-      const c = normalizeCurrency(p.budget_currency)
-      if (!c || !p.budget_amount || p.budget_amount <= 0) continue
-      sumsByCurrency.set(c, (sumsByCurrency.get(c) ?? 0) + p.budget_amount)
+      const eff = effectiveBudget(p, dealMap.get(p.id))
+      if (!eff) continue
+      sumsByCurrency.set(eff.currency, (sumsByCurrency.get(eff.currency) ?? 0) + eff.amount)
     }
     const currencyTotals: CurrencyTotal[] = Array.from(sumsByCurrency.entries())
       .map(([currency, amount]) => ({ currency, amount }))
@@ -173,16 +207,19 @@ export interface BrandDetail {
   lastContactAt: string // ISO
 }
 
-function computeAvgDeal(pitches: Pitch[]): AvgDeal | null {
+function computeAvgDeal(
+  pitches: Pitch[],
+  dealMap: Map<string, Deal>,
+): AvgDeal | null {
   const buckets = new Map<string, { sum: number; count: number }>()
   let totalWithBudget = 0
   for (const p of pitches) {
-    const c = normalizeCurrency(p.budget_currency)
-    if (!c || !p.budget_amount || p.budget_amount <= 0) continue
-    const existing = buckets.get(c) ?? { sum: 0, count: 0 }
-    existing.sum += p.budget_amount
+    const eff = effectiveBudget(p, dealMap.get(p.id))
+    if (!eff) continue
+    const existing = buckets.get(eff.currency) ?? { sum: 0, count: 0 }
+    existing.sum += eff.amount
     existing.count += 1
-    buckets.set(c, existing)
+    buckets.set(eff.currency, existing)
     totalWithBudget += 1
   }
   if (buckets.size === 0) return null
@@ -204,8 +241,10 @@ function computeAvgDeal(pitches: Pitch[]): AvgDeal | null {
 // spec §6.4).
 export function findBrandDetail(
   pitches: Pitch[],
-  slug: string
+  deals: Deal[],
+  slug: string,
 ): BrandDetail | null {
+  const dealMap = buildDealMap(deals)
   const isUnknownSlug = slug === UNKNOWN_BRAND_SLUG
   let matched: Pitch[]
 
@@ -233,9 +272,9 @@ export function findBrandDetail(
 
   const sumsByCurrency = new Map<string, number>()
   for (const p of matched) {
-    const c = normalizeCurrency(p.budget_currency)
-    if (!c || !p.budget_amount || p.budget_amount <= 0) continue
-    sumsByCurrency.set(c, (sumsByCurrency.get(c) ?? 0) + p.budget_amount)
+    const eff = effectiveBudget(p, dealMap.get(p.id))
+    if (!eff) continue
+    sumsByCurrency.set(eff.currency, (sumsByCurrency.get(eff.currency) ?? 0) + eff.amount)
   }
   const currencyTotals: CurrencyTotal[] = Array.from(sumsByCurrency.entries())
     .map(([currency, amount]) => ({ currency, amount }))
@@ -251,7 +290,7 @@ export function findBrandDetail(
     pitches: sorted,
     pitchCount: sorted.length,
     currencyTotals,
-    avgDeal: computeAvgDeal(matched),
+    avgDeal: computeAvgDeal(matched, dealMap),
     firstContactAt: oldest.created_at,
     lastContactAt: mostRecent.created_at,
   }

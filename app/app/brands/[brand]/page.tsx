@@ -22,7 +22,8 @@ export async function generateMetadata({
     .from('pitches')
     .select('*')
     .order('created_at', { ascending: false })
-  const detail = findBrandDetail((pitches ?? []) as Pitch[], brandSlug)
+  // displayName doesn't depend on deals; skip the deal fetch here for cost.
+  const detail = findBrandDetail((pitches ?? []) as Pitch[], [], brandSlug)
   return {
     title: detail ? detail.displayName : 'Brands',
   }
@@ -33,23 +34,34 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
 
   const { brand: brandSlug } = await params
 
-  const { data: pitches } = await supabase
-    .from('pitches')
-    .select('*')
-    .order('created_at', { ascending: false })
+  // Parallel-fetch pitches + deals (deals needed for effective-budget
+  // aggregation per CR-6 — Brand-page dollar columns prefer deal.current
+  // values over pitch.budget_amount).
+  const [pitchesResult, allDealsResult] = await Promise.all([
+    supabase
+      .from('pitches')
+      .select('*')
+      .order('created_at', { ascending: false }),
+    supabase.from('deals').select('*'),
+  ])
+  const pitches = pitchesResult.data
+  const allDeals = (allDealsResult.data ?? []) as Deal[]
 
-  const detail = findBrandDetail((pitches ?? []) as Pitch[], brandSlug)
+  const detail = findBrandDetail(
+    (pitches ?? []) as Pitch[],
+    allDeals,
+    brandSlug,
+  )
   // Spec §6.4: silent redirect when slug doesn't resolve to a brand the user has.
   if (!detail) redirect('/app/brands')
 
-  // Per FR-4 S5 (AC5.1–AC5.3): fetch the deal + activity log for each pitch in
-  // this brand's set so the timeline renders direction-aware rows + current
-  // deal state + per-pitch activity log subsection.
+  // Per FR-4 S5 (AC5.1–AC5.3): fetch the activity log for each pitch in this
+  // brand's set so the timeline renders direction-aware rows + current deal
+  // state + per-pitch activity log subsection.
   // CR-2: also fetch entity_tags (joined to tags.slug) per pitch — drives the
   // BHT not-a-pitch predicate that replaces the pre-CR-2 `pitch.category` read.
   const pitchIds = detail.pitches.map((p) => p.id)
-  const [dealsResult, activitiesResult, tagsResult] = await Promise.all([
-    supabase.from('deals').select('*').in('pitch_id', pitchIds),
+  const [activitiesResult, tagsResult] = await Promise.all([
     supabase
       .from('activities')
       .select('*')
@@ -63,9 +75,10 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
   ])
 
   const dealsByPitchId: Record<string, Deal | undefined> = {}
-  for (const d of dealsResult.data ?? []) {
-    const deal = d as Deal
-    dealsByPitchId[deal.pitch_id] = deal
+  for (const deal of allDeals) {
+    if (pitchIds.includes(deal.pitch_id)) {
+      dealsByPitchId[deal.pitch_id] = deal
+    }
   }
 
   const activitiesByPitchId: Record<string, Activity[]> = {}
