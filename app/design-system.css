@@ -3995,3 +3995,989 @@
   .feed-empty { padding: 32px 18px 36px; }
   .feed-empty-h { font-size: 26px; }
 }
+
+/* ════════════════════════════════════════════════════════════
+   CR-8 — PitchDetail unified rebuild (the deal IS the thing)
+   • One canonical Deal card · current state · slate ground
+   • AI summary moves to top — one-line orientation
+   • Original pitch lives ONLY as the first event in History
+     ("MAY 05 · Pitch received · [View original ↗]")
+   • No more parallel pitch/deal grids
+   ════════════════════════════════════════════════════════════ */
+
+/* AI summary repositioned — sits as intro line between head + deal card */
+.pdetail-cr8-intro {
+  padding: 18px 32px 22px;
+  border-bottom: 1px solid var(--line-board);
+}
+.pdetail-cr8-intro-summary {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 22px;
+  line-height: 1.32;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  border-left: 2px solid var(--accent);
+  padding: 4px 0 4px 16px;
+  margin: 0;
+}
+
+/* Outer section wrapper (paper) */
+.pdetail-cr8-section {
+  padding: 22px 32px 0;
+}
+.pdetail-cr8-section + .pdetail-cr8-section { padding-top: 22px; }
+.pdetail-cr8-section:last-of-type { padding-bottom: 14px; }
+
+.pdetail-cr8-section-l {
+  font-family: var(--mono);
+  font-size: 10.5px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-3);
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 14px;
+}
+.pdetail-cr8-section-l::before {
+  content: ""; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--accent);
+  flex: 0 0 auto;
+}
+.pdetail-cr8-section-l-meta {
+  margin-left: auto;
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.10em; color: var(--ink-4);
+  font-weight: 500;
+}
+
+/* The Deal card — primary container, slate ground */
+.pdetail-cr8-card {
+  background: var(--paper-board);
+  border: 1px solid var(--line-board);
+  border-radius: 6px;
+  padding: 22px 24px 22px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+
+/* Card row 1: stage chip + updated meta */
+.pdetail-cr8-card-r1 {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px;
+}
+
+/* Card row 2: 3-stat grid */
+.pdetail-cr8-card-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr;
+  gap: 24px;
+  padding: 6px 0;
+}
+.pdetail-cr8-stat { display: flex; flex-direction: column; gap: 4px; }
+.pdetail-cr8-stat-l {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-4);
+}
+.pdetail-cr8-stat-v {
+  font-family: var(--display); font-weight: 400;
+  font-size: 30px; line-height: 1;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+}
+.pdetail-cr8-stat-v.is-empty {
+  font-family: var(--body); font-weight: 500;
+  font-size: 16px; color: var(--ink-3); font-style: italic;
+}
+.pdetail-cr8-stat-was {
+  font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: 0.06em; color: var(--ink-4);
+  margin-top: 4px;
+  font-style: italic;
+}
+.pdetail-cr8-stat-was b { color: var(--ink-3); font-weight: 500; font-style: normal; }
+.pdetail-cr8-stat-was.is-accent {
+  color: var(--accent); font-style: normal; font-weight: 500;
+}
+.pdetail-cr8-stat-was.is-accent b { color: var(--accent); font-weight: 600; }
+.pdetail-cr8-stat-tags {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.pdetail-cr8-stat-tags-row {
+  display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap;
+}
+.pdetail-cr8-stat-edit-tags {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-3); background: transparent;
+  border: 0; cursor: pointer; padding: 2px 0;
+  display: inline-flex; align-items: center; gap: 6px;
+  border-bottom: 1px solid var(--line);
+  align-self: flex-start;
+}
+.pdetail-cr8-stat-edit-tags:hover { color: var(--ink); border-color: var(--ink); }
+
+/* Card · deliverables list inside the card */
+.pdetail-cr8-card-deliv-wrap {
+  display: flex; flex-direction: column; gap: 0;
+}
+.pdetail-cr8-card-deliv-h {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-3);
+  display: flex; align-items: center; gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line-board);
+}
+.pdetail-cr8-card-deliv-h-meta {
+  margin-left: auto; color: var(--ink-4); font-style: italic;
+}
+.pdetail-cr8-card-deliv {
+  list-style: none; padding: 0; margin: 0;
+  counter-reset: cr8d;
+  display: flex; flex-direction: column;
+}
+.pdetail-cr8-card-deliv li {
+  display: grid; grid-template-columns: 28px 1fr auto;
+  gap: 14px; align-items: baseline;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line-board);
+  font-family: var(--body); font-size: 14.5px;
+  color: var(--ink);
+}
+.pdetail-cr8-card-deliv li:last-child { border-bottom: none; }
+.pdetail-cr8-card-deliv li::before {
+  content: counter(cr8d, decimal-leading-zero);
+  counter-increment: cr8d;
+  font-family: var(--mono); font-size: 10.5px;
+  color: var(--ink-3); letter-spacing: 0.08em;
+}
+.pdetail-cr8-card-deliv-tag {
+  font-family: var(--mono); font-size: 9px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 2px 7px; border-radius: 3px;
+  white-space: nowrap;
+}
+
+/* Card · scope notes pull-quote */
+.pdetail-cr8-card-scope {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 18px; line-height: 1.4;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  border-left: 2px solid var(--accent);
+  padding: 2px 0 2px 16px;
+  margin: 0;
+}
+
+/* Card foot — separator + edit-deal button */
+.pdetail-cr8-card-foot {
+  display: flex; align-items: center; justify-content: flex-end;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-board);
+}
+.pdetail-cr8-card-edit-deal {
+  font-family: var(--body); font-size: 13px; font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 9px 16px 9px 14px;
+  background: var(--paper); color: var(--ink);
+  border: 1px solid var(--ink);
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.pdetail-cr8-card-edit-deal:hover { background: var(--paper-3); }
+
+/* No-deal empty state (replaces card) */
+.pdetail-cr8-nodeal {
+  background: var(--paper);
+  border: 1px dashed var(--line-2);
+  border-radius: 6px;
+  padding: 26px 28px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 20px;
+}
+.pdetail-cr8-nodeal-t {
+  font-family: var(--body); font-size: 14.5px;
+  line-height: 1.5; color: var(--ink-2);
+  max-width: 56ch;
+}
+.pdetail-cr8-nodeal-t b { color: var(--ink); font-weight: 600; }
+.pdetail-cr8-nodeal-cta {
+  font-family: var(--body); font-size: 13px; font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 10px 18px 10px 14px;
+  background: var(--ink); color: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 9px;
+  white-space: nowrap;
+}
+.pdetail-cr8-nodeal-cta::before {
+  content: ""; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--accent);
+}
+
+/* Notes section */
+.pdetail-cr8-notes-ta {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  background: var(--paper-board);
+  border: 1px solid var(--line-board);
+  padding: 14px 16px;
+  font-family: var(--body); font-size: 15px;
+  line-height: 1.5; color: var(--ink);
+}
+.pdetail-cr8-notes-ta:focus {
+  outline: 0; border-color: var(--ink); background: var(--paper);
+}
+.pdetail-cr8-notes-ta::placeholder { color: var(--ink-3); font-style: italic; }
+
+/* History — timeline of events, newest first */
+.pdetail-cr8-history-list {
+  display: flex; flex-direction: column;
+}
+.pdetail-cr8-event {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  gap: 18px; align-items: baseline;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.pdetail-cr8-event:last-child { border-bottom: none; }
+.pdetail-cr8-event-d {
+  font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: 0.10em; color: var(--ink-3);
+  text-transform: uppercase;
+  padding-top: 1px;
+}
+.pdetail-cr8-event-body {
+  font-family: var(--body); font-size: 14px;
+  color: var(--ink-2); line-height: 1.45;
+}
+.pdetail-cr8-event-body b { color: var(--ink); font-weight: 600; }
+.pdetail-cr8-event-body code {
+  font-family: var(--mono); font-size: 12px;
+  color: var(--ink); background: var(--paper-board);
+  padding: 1px 6px; border-radius: 3px;
+}
+.pdetail-cr8-event-sub {
+  display: block;
+  font-family: var(--body); font-size: 13px;
+  font-style: italic; color: var(--ink-3);
+  margin-top: 4px;
+}
+.pdetail-cr8-event-link {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink);
+  background: transparent; border: 0; cursor: pointer;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  align-self: flex-start;
+}
+.pdetail-cr8-event-link:hover { border-color: var(--ink); }
+
+/* Mobile — collapse stats to single column */
+@container app (max-width: 720px) {
+  .pdetail-cr8-section { padding: 18px 22px 0; }
+  .pdetail-cr8-intro { padding: 16px 22px 18px; }
+  .pdetail-cr8-card { padding: 18px 18px 18px; }
+  .pdetail-cr8-card-stats { grid-template-columns: 1fr; gap: 14px; }
+  .pdetail-cr8-event {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .pdetail-cr8-event-d { padding-top: 0; }
+  .pdetail-cr8-event-link { justify-self: flex-start; }
+  .pdetail-cr8-intro-summary { font-size: 18px; }
+  .pdetail-cr8-nodeal {
+    flex-direction: column; align-items: stretch;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   CR-8 v2 — variations + missing affordances
+   • Sender + Deadline facts strip (always-rendered context)
+   • Edit-tags inline panel (in-card)
+   • Edit-deal mode (cells become inputs)
+   • View-original inline expansion (history event)
+   • Removed-deliverable rendering
+   • No-deal card variant (paper / dashed, mirrors deal-card shape)
+   ════════════════════════════════════════════════════════════ */
+
+/* Facts strip — sender + deadline */
+.pdetail-cr8-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: 18px 32px 0;
+  border: 1px solid var(--line-board);
+  border-radius: 4px;
+  background: var(--paper);
+  overflow: hidden;
+}
+.pdetail-cr8-facts-cell {
+  padding: 12px 16px;
+  display: flex; flex-direction: column; gap: 3px;
+  border-right: 1px solid var(--line-board);
+}
+.pdetail-cr8-facts-cell:last-child { border-right: none; }
+.pdetail-cr8-facts-l {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-4);
+}
+.pdetail-cr8-facts-v {
+  font-family: var(--body); font-size: 14.5px; font-weight: 500;
+  color: var(--ink);
+}
+.pdetail-cr8-facts-v.is-empty {
+  color: var(--ink-3); font-style: italic; font-weight: 500;
+}
+.pdetail-cr8-facts-sub {
+  font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: 0.04em; color: var(--ink-3);
+}
+.pdetail-cr8-facts-sub.is-warn { color: var(--accent); font-weight: 500; }
+
+/* Removed deliverable in the list */
+.pdetail-cr8-card-deliv li.is-removed {
+  color: var(--ink-4);
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-4);
+  text-decoration-thickness: 1px;
+}
+.pdetail-cr8-card-deliv li.is-removed::before { color: var(--ink-4); opacity: 0.6; }
+.pdetail-cr8-card-deliv-tag.is-removed {
+  color: var(--ink-4);
+  border-color: var(--ink-4);
+  border-style: dashed;
+}
+/* Modified deliverable (same item, content shifted during negotiation).
+   Distinct from Added (accent) and Removed (dashed ink-4) — solid ink-2,
+   neutral but visible. The "was X" sub-line lives under the item text. */
+.pdetail-cr8-card-deliv-tag.is-modified {
+  color: var(--ink-2);
+  border-color: var(--ink-2);
+}
+.pdetail-cr8-card-deliv-was {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-style: italic;
+  letter-spacing: 0.04em;
+  color: var(--ink-4);
+  margin-top: 4px;
+}
+.pdetail-cr8-card-deliv-was b {
+  color: var(--ink-3); font-weight: 500; font-style: normal;
+}
+
+/* Edit-tags inline panel — sits inside Deal card, between stats + deliv */
+.pdetail-cr8-edit-tags-panel {
+  background: var(--paper);
+  border: 1px solid var(--line-2);
+  border-radius: 5px;
+  padding: 16px 18px 18px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.pdetail-cr8-edit-tags-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px;
+}
+.pdetail-cr8-edit-tags-l {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.pdetail-cr8-edit-tags-l::before {
+  content: ""; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--accent);
+}
+.pdetail-cr8-edit-tags-done {
+  font-family: var(--body); font-size: 12.5px; font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 7px 14px 7px 11px;
+  background: var(--ink); color: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.pdetail-cr8-edit-tags-done::before {
+  content: ""; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--accent);
+}
+.pdetail-cr8-edit-tags-done .check {
+  font-family: var(--mono); font-size: 11px;
+}
+.pdetail-cr8-edit-tags-auto {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-4);
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 0 0;
+  border-top: 1px dashed var(--line);
+  margin-top: 4px;
+}
+.pdetail-cr8-edit-tags-auto::before {
+  content: ""; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--accent);
+}
+.pdetail-cr8-edit-tags-auto b { color: var(--ink-3); font-weight: 500; }
+
+/* View-original — expanded body inline within the history event */
+.pdetail-cr8-event.is-expanded {
+  grid-template-columns: 72px 1fr;
+}
+.pdetail-cr8-event-original {
+  grid-column: 1 / -1;
+  margin-top: 12px;
+  padding: 18px 22px 18px;
+  background: var(--paper-board);
+  border: 1px solid var(--line-board);
+  border-radius: 5px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.pdetail-cr8-event-original-head {
+  display: grid; grid-template-columns: 78px 1fr;
+  gap: 6px 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-board);
+  margin: 0;
+}
+.pdetail-cr8-event-original-head dt {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  color: var(--ink-4);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding-top: 3px;
+  margin: 0;
+}
+.pdetail-cr8-event-original-head dd {
+  font-family: var(--body); font-size: 13.5px;
+  color: var(--ink); margin: 0;
+  font-weight: 500;
+}
+.pdetail-cr8-event-original-head dd.is-mono {
+  font-family: var(--mono); font-size: 12px;
+  letter-spacing: 0.02em;
+  font-weight: 400;
+}
+.pdetail-cr8-event-original-msg {
+  font-family: var(--body); font-size: 14.5px;
+  line-height: 1.65; color: var(--ink-2);
+  white-space: pre-wrap;
+  margin: 0;
+}
+.pdetail-cr8-event-original-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-board);
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-4);
+}
+.pdetail-cr8-event-original-foot b { color: var(--ink-3); font-weight: 500; }
+.pdetail-cr8-event-collapse {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink);
+  background: transparent; border: 0; cursor: pointer;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line-2);
+}
+.pdetail-cr8-event-collapse:hover { border-color: var(--ink); }
+
+/* Edit-deal mode — inputs replace static values */
+.pdetail-cr8-edit-input {
+  font-family: var(--display); font-weight: 400;
+  font-size: 26px; line-height: 1;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  padding: 6px 10px;
+  width: 100%;
+}
+.pdetail-cr8-edit-input:focus { outline: 0; border-color: var(--ink); }
+.pdetail-cr8-edit-textarea {
+  font-family: var(--body); font-size: 14.5px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  padding: 11px 14px;
+  width: 100%;
+  min-height: 72px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.pdetail-cr8-edit-textarea:focus { outline: 0; border-color: var(--ink); }
+
+.pdetail-cr8-deliv-edit {
+  list-style: none; padding: 0; margin: 0;
+  counter-reset: cr8de;
+  display: flex; flex-direction: column;
+  border-top: 1px solid var(--line-board);
+}
+.pdetail-cr8-deliv-edit li {
+  display: grid; grid-template-columns: 28px 1fr auto;
+  gap: 12px; align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-board);
+}
+.pdetail-cr8-deliv-edit li::before {
+  content: counter(cr8de, decimal-leading-zero);
+  counter-increment: cr8de;
+  font-family: var(--mono); font-size: 10.5px;
+  color: var(--ink-3); letter-spacing: 0.08em;
+}
+.pdetail-cr8-deliv-edit input {
+  font-family: var(--body); font-size: 14px;
+  background: transparent; border: 0;
+  padding: 4px 0; color: var(--ink);
+  width: 100%;
+}
+.pdetail-cr8-deliv-edit input:focus { outline: 0; }
+.pdetail-cr8-deliv-edit-remove {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  color: var(--ink-4);
+  background: transparent; border: 0;
+  cursor: pointer; padding: 4px 6px;
+}
+.pdetail-cr8-deliv-edit-remove:hover { color: var(--accent); }
+.pdetail-cr8-deliv-edit-add {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 0 4px;
+  font-family: var(--mono); font-size: 10.5px; font-weight: 500;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  color: var(--ink-3);
+  background: transparent; border: 0;
+  cursor: pointer; align-self: flex-start;
+}
+.pdetail-cr8-deliv-edit-add::before { content: "+"; font-size: 13px; }
+.pdetail-cr8-deliv-edit-add:hover { color: var(--ink); }
+
+.pdetail-cr8-edit-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-board);
+}
+.pdetail-cr8-edit-cancel {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 500;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-3);
+  background: transparent; border: 0;
+  cursor: pointer; padding: 4px 0;
+}
+.pdetail-cr8-edit-cancel:hover { color: var(--ink); }
+.pdetail-cr8-edit-save {
+  font-family: var(--body); font-size: 13px; font-weight: 600;
+  padding: 9px 18px 9px 14px;
+  background: var(--ink); color: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 9px;
+}
+.pdetail-cr8-edit-save::before {
+  content: ""; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--accent);
+}
+
+/* No-deal card variant — paper + dashed border, mirrors deal-card shape */
+.pdetail-cr8-card.is-nodeal {
+  background: var(--paper);
+  border: 1px dashed var(--line-2);
+}
+.pdetail-cr8-card.is-nodeal .pdetail-cr8-card-deliv-h {
+  border-bottom-color: var(--line);
+}
+.pdetail-cr8-card.is-nodeal .pdetail-cr8-card-deliv li {
+  border-bottom-color: var(--line);
+}
+.pdetail-cr8-card.is-nodeal .pdetail-cr8-card-foot {
+  border-top-color: var(--line);
+}
+.pdetail-cr8-card.is-nodeal .pdetail-deal-stage-btn {
+  cursor: default;
+  background: transparent;
+  border-color: var(--line);
+  color: var(--ink-4);
+}
+.pdetail-cr8-card.is-nodeal .pdetail-deal-stage-btn-caret {
+  display: none;
+}
+.pdetail-cr8-card.is-nodeal .pdetail-cr8-stat-was {
+  color: var(--ink-4); font-style: italic;
+}
+.pdetail-cr8-start-tracking {
+  font-family: var(--body); font-size: 13px; font-weight: 600;
+  padding: 9px 18px 9px 14px;
+  background: var(--ink); color: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 9px;
+  white-space: nowrap;
+}
+.pdetail-cr8-start-tracking::before {
+  content: ""; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--accent);
+}
+
+/* Edit-details — overlay modal stacked on top of CR-8 (artboard mock) */
+.pdetail-cr8-overlay-host {
+  position: relative;
+  isolation: isolate;
+}
+.pdetail-cr8-overlay-dim {
+  position: absolute; inset: 0;
+  background: rgba(10, 10, 10, 0.42);
+  z-index: 1;
+  pointer-events: none;
+}
+.pdetail-cr8-overlay-modal {
+  position: absolute;
+  top: 60px;
+  left: 50%; transform: translateX(-50%);
+  width: min(720px, calc(100% - 80px));
+  z-index: 2;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  box-shadow: 0 36px 80px -16px rgba(10, 10, 10, 0.32);
+  display: flex; flex-direction: column;
+}
+.pdetail-cr8-overlay-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 24px;
+  background: var(--paper-board);
+  border-bottom: 1px solid var(--line-board);
+}
+.pdetail-cr8-overlay-h {
+  font-family: var(--display); font-weight: 400;
+  font-size: 28px; line-height: 1;
+  letter-spacing: 0.005em; text-transform: uppercase;
+  color: var(--ink); margin: 0;
+}
+.pdetail-cr8-overlay-h .dot { color: var(--accent); }
+.pdetail-cr8-overlay-body {
+  padding: 22px 24px 16px;
+  display: flex; flex-direction: column; gap: 16px;
+  max-height: 60vh; overflow-y: auto;
+}
+.pdetail-cr8-overlay-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.pdetail-cr8-overlay-field { display: flex; flex-direction: column; gap: 6px; }
+.pdetail-cr8-overlay-field.span-2 { grid-column: span 2; }
+.pdetail-cr8-overlay-field-l {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.pdetail-cr8-overlay-field-l::before {
+  content: ""; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--accent);
+}
+.pdetail-cr8-overlay-input {
+  font-family: var(--body); font-size: 14px; font-weight: 500;
+  padding: 10px 12px;
+  background: var(--paper);
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  color: var(--ink);
+}
+.pdetail-cr8-overlay-input:focus { outline: 0; border-color: var(--ink); }
+.pdetail-cr8-overlay-deliv {
+  list-style: none; padding: 0; margin: 0;
+  counter-reset: cr8od;
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  background: var(--paper);
+}
+.pdetail-cr8-overlay-deliv li {
+  display: grid; grid-template-columns: 28px 1fr auto;
+  gap: 10px; align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.pdetail-cr8-overlay-deliv li:last-child { border-bottom: none; }
+.pdetail-cr8-overlay-deliv li::before {
+  content: counter(cr8od, decimal-leading-zero);
+  counter-increment: cr8od;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-3); letter-spacing: 0.08em;
+}
+.pdetail-cr8-overlay-deliv input {
+  font-family: var(--body); font-size: 13.5px;
+  background: transparent; border: 0; padding: 4px 0;
+  color: var(--ink); width: 100%;
+}
+.pdetail-cr8-overlay-deliv input:focus { outline: 0; }
+.pdetail-cr8-overlay-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px 16px;
+  border-top: 1px solid var(--line-2);
+}
+.pdetail-cr8-overlay-cancel {
+  font-family: var(--body); font-size: 13px; font-weight: 600;
+  color: var(--ink-3); background: transparent;
+  border: 0; cursor: pointer; padding: 8px 14px;
+}
+.pdetail-cr8-overlay-cancel:hover { color: var(--ink); }
+.pdetail-cr8-overlay-save {
+  font-family: var(--body); font-size: 13px; font-weight: 600;
+  padding: 11px 20px 11px 16px;
+  background: var(--ink); color: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.pdetail-cr8-overlay-save::before {
+  content: ""; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--accent);
+}
+.pdetail-cr8-overlay-fine {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+
+/* ─────────── Deal-block stage chip · clickable variant ─────────── */
+.pdetail-deal-stage-wrap {
+  position: relative;
+  width: max-content;
+}
+.pdetail-deal-stage-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono);
+  font-size: 10px; font-weight: 500;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 4px 4px 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--paper);
+  color: var(--ink-2);
+  cursor: pointer;
+  width: max-content;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.pdetail-deal-stage-btn::before {
+  content: ""; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--ink-3);
+  flex: 0 0 auto;
+}
+.pdetail-deal-stage-btn-caret {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-4);
+  border-left: 1px solid var(--line);
+  padding: 1px 8px 1px 8px;
+  margin-left: 4px;
+  display: inline-flex; align-items: center;
+  transform: translateY(-0.5px);
+}
+.pdetail-deal-stage-btn:hover { border-color: var(--ink); color: var(--ink); }
+.pdetail-deal-stage-btn:hover .pdetail-deal-stage-btn-caret { color: var(--ink); }
+.pdetail-deal-stage-btn.is-open {
+  border-color: var(--ink); color: var(--ink);
+}
+
+/* Per-stage dot colors — match .stage variants */
+.pdetail-deal-stage-btn.inbox::before        { background: var(--ink-4); }
+.pdetail-deal-stage-btn.negotiating          { border-color: color-mix(in oklab, var(--accent) 36%, var(--line-2)); }
+.pdetail-deal-stage-btn.negotiating::before  { background: var(--accent); }
+.pdetail-deal-stage-btn.confirmed::before    { background: var(--ink); }
+.pdetail-deal-stage-btn.delivered::before    { background: var(--accent); }
+.pdetail-deal-stage-btn.rejected::before     { background: var(--ink-4); }
+
+/* Dropdown menu */
+.pdetail-deal-stage-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 240px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  box-shadow: 0 18px 36px -10px rgba(10,10,10,0.22);
+  padding: 6px;
+  z-index: 20;
+  display: flex; flex-direction: column;
+  animation: dropIn 0.12s ease-out both;
+}
+.pdetail-deal-stage-menu::before {
+  content: "";
+  position: absolute; top: -6px; left: 18px;
+  width: 10px; height: 10px;
+  background: var(--paper);
+  border-left: 1px solid var(--ink);
+  border-top: 1px solid var(--ink);
+  transform: rotate(45deg);
+}
+.pdetail-deal-stage-menu-l {
+  font-family: var(--mono); font-size: 9.5px;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-4);
+  padding: 8px 12px 4px;
+}
+.pdetail-deal-stage-menu-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px;
+  font-family: var(--body);
+  font-size: 13.5px; font-weight: 500;
+  color: var(--ink-2);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 4px;
+  transition: background 0.12s, color 0.12s;
+}
+.pdetail-deal-stage-menu-item::before {
+  content: ""; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--ink-4);
+  flex: 0 0 auto;
+}
+.pdetail-deal-stage-menu-item.inbox::before        { background: var(--ink-4); }
+.pdetail-deal-stage-menu-item.negotiating::before  { background: var(--accent); }
+.pdetail-deal-stage-menu-item.confirmed::before    { background: var(--ink); }
+.pdetail-deal-stage-menu-item.delivered::before    { background: var(--accent); }
+.pdetail-deal-stage-menu-item.rejected::before     { background: var(--ink-4); }
+.pdetail-deal-stage-menu-item:hover {
+  background: var(--paper-board); color: var(--ink);
+}
+.pdetail-deal-stage-menu-item.is-current {
+  background: var(--paper-board); color: var(--ink); font-weight: 600;
+}
+.pdetail-deal-stage-menu-item-label { flex: 1; }
+.pdetail-deal-stage-menu-item-check {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--accent); flex: 0 0 auto;
+}
+
+@container app (max-width: 720px) {
+  .pdetail-deal-stage-menu { min-width: 200px; }
+}
+
+
+/* CR-6 base modal frame (lifted from design source) */
+.pdetail-scrim {
+  position: absolute; inset: 0;
+  background: color-mix(in oklab, var(--ink) 38%, transparent);
+  backdrop-filter: blur(2px);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 60px 28px 28px;
+  z-index: 30;
+  overflow-y: auto;
+}
+.pdetail {
+  background: var(--paper);
+  border: 1px solid var(--line-board);
+  width: 100%;
+  max-width: 920px;
+  box-shadow: 0 28px 60px -10px rgba(10,10,10,0.18);
+  display: flex; flex-direction: column;
+}
+
+/* Top band — DirChip (or "Pitch detail" fallback) + received-date sub-line.
+   Stacked layout so date never wraps into the close-button's space. */
+.pdetail-band {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 18px 32px;
+  border-bottom: 1px solid var(--line-board);
+  background: var(--paper-board);
+  gap: 16px;
+}
+.pdetail-band-l {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  min-width: 0;
+}
+.pdetail-band-l .kicker { display: inline-flex; align-items: center; gap: 8px; }
+.pdetail-band-l .kicker::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.pdetail-band-when {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.pdetail-close {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-3);
+  background: transparent; border: 0; cursor: pointer;
+  padding: 8px 10px;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.pdetail-close:hover { color: var(--ink); }
+.pdetail-close .x { font-size: 14px; }
+
+/* Header — brand H1 + meta line */
+.pdetail-head {
+  padding: 36px 32px 28px;
+  border-bottom: 1px solid var(--line-board);
+}
+.pdetail-h1 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(54px, 7vw, 84px);
+  line-height: 0.92;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0;
+  text-transform: uppercase;
+}
+.pdetail-h1.muted { color: var(--ink-3); font-style: italic; text-transform: none; font-family: var(--body); font-weight: 500; }
+.pdetail-h1 .dot { color: var(--accent); }
+.pdetail-meta {
+  margin-top: 14px;
+  font-family: var(--mono);
+  font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-3);
+  display: flex; flex-wrap: wrap; gap: 6px 14px;
+}
+.pdetail-meta span { display: inline-flex; align-items: center; gap: 8px; }
+.pdetail-meta span + span::before { content: "·"; color: var(--line-board); }
+
+
+/* CR-6 modal footer + footer-button variants */
+.pdetail-foot {
+  padding: 20px 32px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.pdetail-foot-l { display: flex; align-items: center; gap: 18px; }
+.pdetail-foot-r { display: flex; align-items: center; gap: 12px; }
+.pdetail-delete {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--accent);
+  background: transparent; border: 0; cursor: pointer; padding: 8px 0;
+}
+.pdetail-delete:hover { text-decoration: underline; }
+.pdetail-edit, .pdetail-primary {
+  font-family: var(--body); font-size: 13px; font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 12px 20px;
+  cursor: pointer;
+  border: 1px solid var(--ink);
+  display: inline-flex; align-items: center; gap: 10px;
+  white-space: nowrap;
+}
+.pdetail-edit { background: var(--paper); color: var(--ink); }
+.pdetail-edit:hover { background: var(--paper-3); }
+.pdetail-primary { background: var(--ink); color: var(--paper); border-radius: 999px; padding: 12px 22px 12px 18px; }
+.pdetail-primary::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.pdetail-primary:hover { background: color-mix(in oklab, var(--ink) 88%, white); }
+.pdetail-primary .arr { font-family: var(--mono); font-size: 14px; }
