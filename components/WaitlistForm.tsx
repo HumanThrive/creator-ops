@@ -15,10 +15,30 @@ export default function WaitlistForm() {
     setStatus('loading')
     setError(null)
 
+    const params = new URLSearchParams(window.location.search)
+    const utmKeys = [
+      'utm_source',
+      'utm_medium',
+      'utm_campaign',
+      'utm_content',
+      'utm_term',
+    ] as const
+    const utmFields: Record<string, string> = {}
+    for (const key of utmKeys) {
+      const value = params.get(key)
+      if (value !== null && value !== '') {
+        utmFields[key] = value
+      }
+    }
+
     const supabase = createClient()
     const { error: insertError } = await supabase
       .from('waitlist_emails')
-      .insert({ email: email.trim().toLowerCase(), source: 'landing' })
+      .insert({
+        email: email.trim().toLowerCase(),
+        source: 'landing',
+        ...utmFields,
+      })
 
     if (insertError) {
       if (insertError.code === '23505') {
