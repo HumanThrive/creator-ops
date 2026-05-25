@@ -12,6 +12,12 @@ import { PITCH_SOURCE_CHANNELS } from '@/lib/types/pitch'
 import { formatSourceChannel } from '@/lib/format'
 import { ChipSelector, type ChipSelectorOption } from './ChipSelector'
 import { Spinner } from './Spinner'
+import {
+  EntityTypeahead,
+  type BrandMatch,
+  type ContactMatch,
+  type ContactCreatePayload,
+} from './EntityTypeahead'
 
 function friendlyExtractError(code: string | undefined): string {
   switch (code) {
@@ -119,6 +125,10 @@ export function AddPitchModal({
   // Compensation state is PRESERVED across legitimacy flips per AC4.5.
   const [legitimacy, setLegitimacy] = useState<string | null>(null)
   const [compensation, setCompensation] = useState<string[]>([])
+  // FR-7 W68: typeahead-override IDs. Null = no explicit selection; API route
+  // auto-resolves from brand_name/sender_email strings per AC1.1/AC2.1.
+  const [brandIdOverride, setBrandIdOverride] = useState<string | null>(null)
+  const [contactIdOverride, setContactIdOverride] = useState<string | null>(null)
 
   const copy = COPY[direction]
 
@@ -170,7 +180,6 @@ export function AddPitchModal({
     setState('loading')
     setError(null)
 
-    const supabase = createClient()
     // Direction invariants enforced at save-time regardless of toggle state:
     // outbound → sender_name=null. Underlying extracted sender_name preserved
     // so toggling back to inbound recovers values.
@@ -191,70 +200,76 @@ export function AddPitchModal({
       tagSlugs = legit === 'valid' ? [legit, ...compensation] : [legit]
     }
 
-    const { data: pitchData, error: rpcError } = await supabase.rpc(
-      'save_pitch_with_activity',
-      {
-        p_raw_pitch_text: pitchText,
-        p_direction: direction,
-        p_brand_name: extracted.brand_name,
-        p_sender_name: senderName,
-        p_deliverables: extracted.deliverables,
-        p_budget_amount: extracted.budget.amount,
-        p_budget_currency: extracted.budget.currency,
-        p_budget_notes: extracted.budget.notes,
-        p_deadline: extracted.deadline,
-        p_tag_slugs: tagSlugs,
-        p_ai_summary: extracted.summary,
-        p_industry: extracted.industry,
-        p_sender_email: extracted.sender_email,
-        p_source_channel: extracted.source_channel,
-        p_source_subject: extracted.source_subject,
-      }
-    )
+    // FR-7 W68: save now goes through /api/pitches/save orchestration layer.
+    // Route handles Brand + Contact + Thread resolution + pivot inserts.
+    // Typeahead-override IDs (brandIdOverride, contactIdOverride) bypass the
+    // route's string-based auto-resolution path per AC7.2.
+    const saveResp = await fetch('/api/pitches/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        raw_pitch_text: pitchText,
+        direction,
+        brand_name: extracted.brand_name,
+        sender_name: senderName,
+        deliverables: extracted.deliverables,
+        budget_amount: extracted.budget.amount,
+        budget_currency: extracted.budget.currency,
+        budget_notes: extracted.budget.notes,
+        deadline: extracted.deadline,
+        tag_slugs: tagSlugs,
+        ai_summary: extracted.summary,
+        industry: extracted.industry,
+        sender_email: extracted.sender_email,
+        source_channel: extracted.source_channel,
+        source_subject: extracted.source_subject,
+        brand_id: brandIdOverride,
+        contact_id: contactIdOverride,
+      }),
+    })
 
-    if (rpcError) {
-      setError(rpcError.message)
+    const saveJson: { success: boolean; data?: { pitch_id: string }; error?: string } =
+      await saveResp.json()
+    if (!saveJson.success) {
+      setError(saveJson.error ?? 'save_failed')
       setState('error')
       return
     }
+    const pitchResult = saveJson.data ?? null
 
-    const pitchResult = pitchData as { pitch_id: string } | null
-
-    // Auto-deal-create skip-list is now folded into save_pitch_with_activity
-    // RPC per AC4.3 — no separate create_deal_with_activity call needed.
-
-    // Optional notes — chain update_pitch_with_activity with the same tag set.
-    // Creates an extra pitch_updated activity row (accurate audit: notes added
-    // at create-time as a separate action). Future iteration: extend save RPC
-    // to accept user_notes directly and drop this chain.
+    // Optional notes — chain update via /api/pitches/update with the same tag
+    // set. Creates an extra pitch_updated activity row (accurate audit: notes
+    // added at create-time as a separate action). Future iteration: extend
+    // save route + RPC to accept user_notes directly and drop this chain.
     const trimmedNotes = userNotes.trim()
     if (trimmedNotes && pitchResult?.pitch_id) {
-      const { error: notesError } = await supabase.rpc(
-        'update_pitch_with_activity',
-        {
-          p_pitch_id: pitchResult.pitch_id,
-          p_brand_name: extracted.brand_name,
-          p_sender_name: senderName,
-          p_deliverables: extracted.deliverables,
-          p_budget_amount: extracted.budget.amount,
-          p_budget_currency: extracted.budget.currency,
-          p_budget_notes: extracted.budget.notes,
-          p_deadline: extracted.deadline,
-          p_tag_slugs: tagSlugs,
-          p_ai_summary: extracted.summary,
-          p_user_notes: trimmedNotes,
-          p_field_diffs: { user_notes: [null, trimmedNotes] },
-          p_industry: extracted.industry,
-          p_sender_email: extracted.sender_email,
-          p_source_channel: extracted.source_channel,
-          p_source_subject: extracted.source_subject,
-        }
-      )
-      if (notesError) {
-        console.error(
-          '[AddPitchModal] notes save failed:',
-          notesError.message
-        )
+      const notesResp = await fetch('/api/pitches/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pitch_id: pitchResult.pitch_id,
+          brand_name: extracted.brand_name,
+          sender_name: senderName,
+          deliverables: extracted.deliverables,
+          budget_amount: extracted.budget.amount,
+          budget_currency: extracted.budget.currency,
+          budget_notes: extracted.budget.notes,
+          deadline: extracted.deadline,
+          tag_slugs: tagSlugs,
+          ai_summary: extracted.summary,
+          user_notes: trimmedNotes,
+          field_diffs: { user_notes: [null, trimmedNotes] },
+          industry: extracted.industry,
+          sender_email: extracted.sender_email,
+          source_channel: extracted.source_channel,
+          source_subject: extracted.source_subject,
+          // No brand_id/contact_id override on notes-chain update — RPC's
+          // COALESCE preserves what /api/pitches/save just persisted.
+        }),
+      })
+      const notesJson: { success: boolean; error?: string } = await notesResp.json()
+      if (!notesJson.success) {
+        console.error('[AddPitchModal] notes save failed:', notesJson.error)
       }
     }
 
@@ -390,25 +405,100 @@ export function AddPitchModal({
           {hasExtracted && extracted && (
             <form onSubmit={onSave} className="add-modal-fields">
               <Field label="Brand">
-                <input
-                  type="text"
-                  className="add-modal-field-input"
+                <EntityTypeahead
+                  kind="brand"
                   value={extracted.brand_name ?? ''}
-                  onChange={(e) =>
-                    updateField('brand_name', e.target.value || null)
-                  }
+                  onChange={(v) => {
+                    updateField('brand_name', v || null)
+                    // Free-typing invalidates a prior explicit-selection
+                    setBrandIdOverride(null)
+                  }}
+                  onSelectExisting={(b: BrandMatch | null) => {
+                    if (b) {
+                      updateField('brand_name', b.name)
+                      setBrandIdOverride(b.id)
+                    } else {
+                      setBrandIdOverride(null)
+                    }
+                  }}
+                  onCreateNew={(typed: string) => {
+                    updateField('brand_name', typed)
+                    setBrandIdOverride(null) // route auto-creates on save
+                  }}
+                  placeholder="Brand name"
                 />
               </Field>
 
               {direction === 'inbound' && (
                 <Field label="Sender">
-                  <input
-                    type="text"
-                    className="add-modal-field-input"
+                  <EntityTypeahead
+                    kind="contact"
                     value={extracted.sender_name ?? ''}
-                    onChange={(e) =>
-                      updateField('sender_name', e.target.value || null)
-                    }
+                    onChange={(v) => {
+                      updateField('sender_name', v || null)
+                      setContactIdOverride(null)
+                    }}
+                    onSelectExisting={(c: ContactMatch | null) => {
+                      if (c) {
+                        updateField('sender_name', c.display_name)
+                        // Pre-fill sender_email from Contact's Primary Email if available
+                        const primaryEmail = c.channels?.find(
+                          (ch) => ch.kind === 'Email' && ch.primary,
+                        )
+                        if (primaryEmail) {
+                          updateField('sender_email', primaryEmail.identifier)
+                        }
+                        setContactIdOverride(c.id)
+                      } else {
+                        setContactIdOverride(null)
+                      }
+                    }}
+                    onCreateNew={async (payload: ContactCreatePayload) => {
+                      // Client-side INSERT via supabase-js (respects RLS).
+                      // Route's resolution skips when contact_id override is passed.
+                      try {
+                        const sb = createClient()
+                        const { data, error } = await sb
+                          .from('contacts')
+                          .insert({
+                            display_name: payload.display_name,
+                            channels: payload.channels.map((c) => ({
+                              ...c,
+                              identifier:
+                                c.kind === 'Email'
+                                  ? c.identifier.trim().toLowerCase()
+                                  : c.identifier.trim(),
+                            })),
+                          })
+                          .select('id')
+                          .single()
+                        if (error) {
+                          console.error(
+                            '[AddPitchModal] contact create failed:',
+                            error.message,
+                          )
+                          return
+                        }
+                        const newId = (data as { id: string }).id
+                        setContactIdOverride(newId)
+                        if (payload.display_name) {
+                          updateField('sender_name', payload.display_name)
+                        }
+                        const primaryEmail = payload.channels.find(
+                          (c) => c.kind === 'Email' && c.primary,
+                        )
+                        if (primaryEmail) {
+                          updateField('sender_email', primaryEmail.identifier)
+                        }
+                      } catch (e) {
+                        console.error(
+                          '[AddPitchModal] contact create unexpected:',
+                          e,
+                        )
+                      }
+                    }}
+                    placeholder="Sender name"
+                    seedEmail={extracted.sender_email}
                   />
                 </Field>
               )}
