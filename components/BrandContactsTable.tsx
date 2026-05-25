@@ -1,10 +1,9 @@
+import Link from 'next/link'
 import { formatCurrencyAmount } from '@/lib/pitch-stats'
 
 // FR-7 W71 — BrandContactsTable per design canon §39 Surface B.
 // 7-column row grid: Contact · Role · Channels · Pitches · Last close · Last touch · Arrow.
-// W72 (Contact detail page) will swap each row for a <Link>; v1 ships as a
-// static row with cursor: default so the rows-as-affordance read without
-// promising a route that hasn't shipped yet.
+// W72 wired rows as <Link href="/app/people/[id]"> per design canon.
 
 type ChannelKind =
   | 'Email'
@@ -97,11 +96,10 @@ export function BrandContactsTable({ rows }: BrandContactsTableProps) {
         <span></span>
       </div>
       {rows.map((row) => (
-        <div
+        <Link
           key={row.contactId}
+          href={`/app/people/${row.contactId}`}
           className="contacts-table-row"
-          style={{ cursor: 'default' }}
-          title="Contact detail page lands with W72"
         >
           <div className="ctc-name">
             <div className="ctc-avatar">{initials(row.displayName)}</div>
@@ -178,7 +176,7 @@ export function BrandContactsTable({ rows }: BrandContactsTableProps) {
             ) : null}
           </span>
           <span className="ctc-arrow">→</span>
-        </div>
+        </Link>
       ))}
     </div>
   )

@@ -432,13 +432,13 @@ export function RelationshipLens({ pitch }: RelationshipLensProps) {
               View {brandDisplayName} <span className="arr">↗</span>
             </button>
           ) : null}
-          {hasContact ? (
+          {hasContact && pitch.contact_id ? (
             <button
               type="button"
               className="lens-nav-btn"
-              disabled
-              title="Contact detail page lands with W72"
-              style={{ opacity: 0.55, cursor: 'not-allowed' }}
+              onClick={() => {
+                router.push(`/app/people/${pitch.contact_id}`)
+              }}
             >
               View {contactDisplayName} <span className="arr">↗</span>
             </button>
