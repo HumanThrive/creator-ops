@@ -129,6 +129,11 @@ export function AddPitchModal({
   // auto-resolves from brand_name/sender_email strings per AC1.1/AC2.1.
   const [brandIdOverride, setBrandIdOverride] = useState<string | null>(null)
   const [contactIdOverride, setContactIdOverride] = useState<string | null>(null)
+  // Lifted from EntityTypeahead's internal state — child state was resetting
+  // unexpectedly between renders (root cause unidentified); parent ownership
+  // survives any child remount.
+  const [brandChip, setBrandChip] = useState<{ label: string } | null>(null)
+  const [contactChip, setContactChip] = useState<{ label: string } | null>(null)
 
   const copy = COPY[direction]
 
@@ -408,6 +413,8 @@ export function AddPitchModal({
                 <EntityTypeahead
                   kind="brand"
                   value={extracted.brand_name ?? ''}
+                  selected={brandChip}
+                  onSelectedChange={setBrandChip}
                   onChange={(v) => {
                     updateField('brand_name', v || null)
                     // Free-typing invalidates a prior explicit-selection
@@ -434,20 +441,32 @@ export function AddPitchModal({
                   <EntityTypeahead
                     kind="contact"
                     value={extracted.sender_name ?? ''}
+                    selected={contactChip}
+                    onSelectedChange={setContactChip}
                     onChange={(v) => {
                       updateField('sender_name', v || null)
                       setContactIdOverride(null)
                     }}
                     onSelectExisting={(c: ContactMatch | null) => {
                       if (c) {
-                        updateField('sender_name', c.display_name)
-                        // Pre-fill sender_email from Contact's Primary Email if available
+                        // Combine display_name + sender_email into a single
+                        // setExtracted to avoid stale-closure clobber (defect 3:
+                        // double updateField → second call's closure overrode
+                        // first's update because updateField uses non-functional
+                        // setState on `extracted`).
                         const primaryEmail = c.channels?.find(
                           (ch) => ch.kind === 'Email' && ch.primary,
                         )
-                        if (primaryEmail) {
-                          updateField('sender_email', primaryEmail.identifier)
-                        }
+                        setExtracted((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                sender_name: c.display_name,
+                                sender_email:
+                                  primaryEmail?.identifier ?? prev.sender_email,
+                              }
+                            : prev,
+                        )
                         setContactIdOverride(c.id)
                       } else {
                         setContactIdOverride(null)
@@ -458,17 +477,30 @@ export function AddPitchModal({
                       // Route's resolution skips when contact_id override is passed.
                       try {
                         const sb = createClient()
+                        // RLS users_insert_own_contacts requires auth.uid() = user_id;
+                        // payload must include user_id explicitly (no DB default).
+                        const {
+                          data: { user: currentUser },
+                        } = await sb.auth.getUser()
+                        if (!currentUser) {
+                          console.error(
+                            '[AddPitchModal] contact create skipped — no user session',
+                          )
+                          return
+                        }
+                        const normalizedChannels = payload.channels.map((c) => ({
+                          ...c,
+                          identifier:
+                            c.kind === 'Email'
+                              ? c.identifier.trim().toLowerCase()
+                              : c.identifier.trim(),
+                        }))
                         const { data, error } = await sb
                           .from('contacts')
                           .insert({
+                            user_id: currentUser.id,
                             display_name: payload.display_name,
-                            channels: payload.channels.map((c) => ({
-                              ...c,
-                              identifier:
-                                c.kind === 'Email'
-                                  ? c.identifier.trim().toLowerCase()
-                                  : c.identifier.trim(),
-                            })),
+                            channels: normalizedChannels,
                           })
                           .select('id')
                           .single()
@@ -480,16 +512,23 @@ export function AddPitchModal({
                           return
                         }
                         const newId = (data as { id: string }).id
-                        setContactIdOverride(newId)
-                        if (payload.display_name) {
-                          updateField('sender_name', payload.display_name)
-                        }
-                        const primaryEmail = payload.channels.find(
+                        const primaryEmail = normalizedChannels.find(
                           (c) => c.kind === 'Email' && c.primary,
                         )
-                        if (primaryEmail) {
-                          updateField('sender_email', primaryEmail.identifier)
-                        }
+                        // Combine into single setExtracted (same stale-closure
+                        // fix as onSelectExisting above).
+                        setExtracted((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                sender_name:
+                                  payload.display_name ?? prev.sender_name,
+                                sender_email:
+                                  primaryEmail?.identifier ?? prev.sender_email,
+                              }
+                            : prev,
+                        )
+                        setContactIdOverride(newId)
                       } catch (e) {
                         console.error(
                           '[AddPitchModal] contact create unexpected:',

@@ -5055,7 +5055,7 @@
 
 /* ─────────── EntityTypeahead (FR-7 W68; lifted from CR-7 Surface D HTML) ─────────── */
 
-.ta { position: relative; display: flex; flex-direction: column; }
+.ta { position: relative; display: flex; flex-direction: column; width: 100%; }
 .ta-input-wrap { position: relative; }
 .ta-input {
   width: 100%;
@@ -5089,8 +5089,14 @@
 }
 .ta-clear:hover { border-color: var(--ink); color: var(--ink); }
 
-/* Inline-results card */
+/* Floating-results card (fix 2.4 — absolute positioning so dropdown overlays
+   rather than pushes layout down). Anchored to the .ta wrapper. */
 .ta-card {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 50;
   background: var(--paper);
   border: 1px solid var(--ink);
   border-top: none;
@@ -5099,8 +5105,8 @@
   overflow: hidden;
   display: flex; flex-direction: column;
 }
-.ta.is-inline .ta-card { position: static; }
-.ta:not(.is-open) .ta-card { display: none; }
+.ta.is-inline .ta-card { position: absolute; }
+.ta:not(.is-open):not(.is-creating) .ta-card { display: none; }
 
 /* CARD HEAD · brand-scope filter */
 .ta-card-head {

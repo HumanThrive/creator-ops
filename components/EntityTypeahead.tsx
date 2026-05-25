@@ -6,7 +6,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type FormEvent,
 } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -115,6 +114,11 @@ type Props =
       onCreateNew: (typed: string) => void
       placeholder?: string
       disabled?: boolean
+      // Chip state lifted to parent (defect 2.1-fix v2): internal state was
+      // resetting between renders for reasons we couldn't pin down; parent
+      // state survives any child remount.
+      selected: { label: string } | null
+      onSelectedChange: (s: { label: string } | null) => void
     }
   | {
       kind: 'contact'
@@ -124,18 +128,25 @@ type Props =
       onCreateNew: (payload: ContactCreatePayload) => void
       placeholder?: string
       disabled?: boolean
-      // Pre-fill seeds for create-new form (AI-extracted values)
       seedEmail?: string | null
+      selected: { label: string } | null
+      onSelectedChange: (s: { label: string } | null) => void
     }
 
 export function EntityTypeahead(props: Props) {
-  const { kind, value, onChange, placeholder, disabled } = props
+  const { kind, value, onChange, placeholder, disabled, selected, onSelectedChange } = props
   const supabase = useMemo(() => createClient(), [])
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [brandResults, setBrandResults] = useState<BrandMatch[]>([])
   const [contactResults, setContactResults] = useState<ContactMatch[]>([])
   const wrapRef = useRef<HTMLDivElement | null>(null)
+  // Phantom-click guard: when user clicks a dropdown row, React renders the
+  // chip mode (with X button at the same screen position as the row) FAST.
+  // The same physical click event can then re-dispatch to the X button,
+  // immediately clearing the just-made selection. Suppress handleClearSelection
+  // within 300ms of any selection.
+  const lastSelectionAtRef = useRef<number>(0)
 
   // Close on outside click
   useEffect(() => {
@@ -185,23 +196,36 @@ export function EntityTypeahead(props: Props) {
     setOpen(true)
   }
 
+  // Selection handlers: DO NOT call onChange after onSelectExisting. The
+  // parent's onChange handler clears the entity-id override (treating any
+  // change as "user is free-typing"), so calling onChange here would defeat
+  // the override that onSelectExisting just set. Parent's onSelectExisting
+  // handler is the one responsible for updating the underlying text value
+  // (via updateField('brand_name', ...) etc.); the input's `value` prop will
+  // reflect the new text on next render. In chip mode the input isn't even
+  // shown, so input-text sync isn't required at selection time.
   function handleSelectBrand(brand: BrandMatch) {
     if (props.kind !== 'brand') return
     props.onSelectExisting(brand)
-    onChange(brand.name)
+    onSelectedChange({ label: brand.name })
+    lastSelectionAtRef.current = Date.now()
     setOpen(false)
   }
 
   function handleSelectContact(contact: ContactMatch) {
     if (props.kind !== 'contact') return
     props.onSelectExisting(contact)
-    onChange(contact.display_name ?? '')
+    onSelectedChange({ label: contact.display_name ?? '(no name)' })
+    lastSelectionAtRef.current = Date.now()
     setOpen(false)
   }
 
   function handleBrandCreate() {
     if (props.kind !== 'brand') return
-    props.onCreateNew(value.trim())
+    const typed = value.trim()
+    props.onCreateNew(typed)
+    onSelectedChange({ label: typed })
+    lastSelectionAtRef.current = Date.now()
     setOpen(false)
   }
 
@@ -210,14 +234,52 @@ export function EntityTypeahead(props: Props) {
     setCreating(true)
   }
 
+  function handleClearSelection() {
+    // Phantom-click guard: ignore X button clicks that fire within 300ms of
+    // a selection (likely the same physical user click re-dispatched to the
+    // X button due to fast DOM mutation between event phases).
+    const sinceSelect = Date.now() - lastSelectionAtRef.current
+    if (sinceSelect < 300) {
+      console.warn('[ETA] handleClearSelection IGNORED (phantom click; sinceSelect=' + sinceSelect + 'ms)')
+      return
+    }
+    onSelectedChange(null)
+    props.onSelectExisting(null)
+    onChange('') // clear the input text on Clear (parent state syncs)
+  }
+
   const results = kind === 'brand' ? brandResults : contactResults
   const trimmed = value.trim()
-  const showCreateAffordance =
-    open && trimmed.length > 0 && results.length === 0
+
+  // Post-selection chip mode — replaces the input until user clicks Clear.
+  // Dropdown can't reopen because the input is unmounted.
+  if (selected) {
+    return (
+      <div className="ta is-selected" ref={wrapRef}>
+        <div className="ta-selected">
+          <div className={`ta-row-avatar ${kind === 'brand' ? 'is-brand' : ''}`}>
+            {initials(selected.label)}
+          </div>
+          <div className="ta-selected-glance">
+            <span className="ta-row-name">{selected.label}</span>
+          </div>
+          <span className="ta-selected-mark">Linked</span>
+          <button
+            type="button"
+            className="ta-selected-clear"
+            onClick={handleClearSelection}
+            aria-label="Clear selection"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
-      className={`ta ${open ? 'is-open' : ''} ${creating ? 'is-creating' : ''} is-inline`}
+      className={`ta ${open ? 'is-open' : ''} ${creating ? 'is-creating' : ''}`}
       ref={wrapRef}
     >
       <div className="ta-input-wrap">
@@ -313,11 +375,6 @@ export function EntityTypeahead(props: Props) {
             </div>
           )}
 
-          {showCreateAffordance && results.length === 0 && (
-            <div className="ta-empty" style={{ display: 'none' }}>
-              No matches.
-            </div>
-          )}
         </div>
       )}
 
@@ -327,6 +384,9 @@ export function EntityTypeahead(props: Props) {
           initialEmail={props.seedEmail ?? null}
           onSubmit={(payload) => {
             props.onCreateNew(payload)
+            const label = payload.display_name?.trim() || value.trim() || '(no name)'
+            onSelectedChange({ label })
+            lastSelectionAtRef.current = Date.now()
             setCreating(false)
           }}
           onCancel={() => setCreating(false)}
@@ -390,8 +450,9 @@ function ContactCreateForm({
     })
   }, [])
 
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault()
+  // No <form> element — AddPitchModal already wraps in <form> and HTML
+  // forbids nested forms (hydration error 3.1). Use a <div> + click handler.
+  function handleSubmit() {
     const cleaned = channels
       .map((r) => ({ ...r, identifier: r.identifier.trim() }))
       .filter((r) => r.identifier.length > 0)
@@ -403,7 +464,7 @@ function ContactCreateForm({
   }
 
   return (
-    <form className="ta-card" onSubmit={handleSubmit}>
+    <div className="ta-card">
       <div className="ta-create-form">
         <div className="ta-create-form-row">
           <label className="ta-create-form-l">Display name</label>
@@ -507,11 +568,15 @@ function ContactCreateForm({
         >
           Cancel
         </button>
-        <button type="submit" className="ta-scope-toggle is-on">
+        <button
+          type="button"
+          className="ta-scope-toggle is-on"
+          onClick={handleSubmit}
+        >
           Create contact
         </button>
       </div>
-    </form>
+    </div>
   )
 }
 
