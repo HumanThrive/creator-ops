@@ -3,7 +3,13 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { BrandHistoryTable } from '@/components/BrandHistoryTable'
-import { findBrandDetail, formatCurrencyAmount } from '@/lib/pitch-stats'
+import { BrandStatsStrip } from '@/components/BrandStatsStrip'
+import {
+  BrandContactsTable,
+  type BrandContactRow,
+  type ContactRole,
+} from '@/components/BrandContactsTable'
+import { findBrandDetail } from '@/lib/pitch-stats'
 import { formatFullDate, formatRelativeTime } from '@/lib/format'
 import type { Pitch } from '@/lib/types/pitch'
 import type { Deal } from '@/lib/types/deal'
@@ -22,7 +28,6 @@ export async function generateMetadata({
     .from('pitches')
     .select('*')
     .order('created_at', { ascending: false })
-  // displayName doesn't depend on deals; skip the deal fetch here for cost.
   const detail = findBrandDetail((pitches ?? []) as Pitch[], [], brandSlug)
   return {
     title: detail ? detail.displayName : 'Brands',
@@ -34,9 +39,6 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
 
   const { brand: brandSlug } = await params
 
-  // Parallel-fetch pitches + deals (deals needed for effective-budget
-  // aggregation per CR-6 — Brand-page dollar columns prefer deal.current
-  // values over pitch.budget_amount).
   const [pitchesResult, allDealsResult] = await Promise.all([
     supabase
       .from('pitches')
@@ -52,16 +54,18 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
     allDeals,
     brandSlug,
   )
-  // Spec §6.4: silent redirect when slug doesn't resolve to a brand the user has.
   if (!detail) redirect('/app/brands')
 
-  // Per FR-4 S5 (AC5.1–AC5.3): fetch the activity log for each pitch in this
-  // brand's set so the timeline renders direction-aware rows + current deal
-  // state + per-pitch activity log subsection.
-  // CR-2: also fetch entity_tags (joined to tags.slug) per pitch — drives the
-  // BHT not-a-pitch predicate that replaces the pre-CR-2 `pitch.category` read.
   const pitchIds = detail.pitches.map((p) => p.id)
-  const [activitiesResult, tagsResult] = await Promise.all([
+
+  // FR-7 W71: resolve brand_id from any backfilled pitch under this Brand.
+  // Migration 2 ensured every pre-FR-7 pitch carries brand_id; if no pitch
+  // in detail.pitches has brand_id, fall back to "no FR-7 surface" mode
+  // (still render the legacy history table; skip new strips).
+  const brandId =
+    detail.pitches.find((p) => p.brand_id !== null)?.brand_id ?? null
+
+  const [activitiesResult, tagsResult, contactBrandsResult] = await Promise.all([
     supabase
       .from('activities')
       .select('*')
@@ -72,6 +76,31 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
       .select('ref_id, tags(slug)')
       .eq('ref_type', 'pitch')
       .in('ref_id', pitchIds),
+    // FR-7 W71: contact_brands pivot rows + contacts JOIN for the contacts
+    // table. Joined contact row gives display_name + channels; pivot gives
+    // the per-Brand role enum. The join is RLS-safe per user_id denormalization
+    // on the pivot table.
+    brandId
+      ? supabase
+          .from('contact_brands')
+          .select('contact_id, role, contacts(id, display_name, channels)')
+          .eq('brand_id', brandId)
+      : Promise.resolve({
+          data: [] as {
+            contact_id: string
+            role: string | null
+            contacts: {
+              id: string
+              display_name: string | null
+              channels: Array<{
+                kind: string
+                identifier: string
+                primary: boolean
+              }>
+            } | null
+          }[],
+          error: null,
+        }),
   ])
 
   const dealsByPitchId: Record<string, Deal | undefined> = {}
@@ -100,10 +129,162 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
     tagsByPitchId[refId] = bucket
   }
 
+  // ─── FR-7 W71: BrandStatsStrip aggregations ────────────────────────
+  // Pitches = count of pitches under this brand (from detail).
+  // Closed total = SUM(current_budget_amount) over deals.stage='delivered'
+  //   for pitches under this brand. PL synthesis (handoff 2026-05-25 [11:13]):
+  //   single dominant currency only at v1 — pick the currency with the
+  //   largest delivered sum; show fallback "—" when there's no closed deal.
+  // Contacts = count of distinct contact_id in contact_brands under this brand.
+  let closedAccByCurrency = new Map<string, number>()
+  let closedDealCount = 0
+  let inFlightCount = 0
+  let declinedCount = 0
+  for (const pid of pitchIds) {
+    const d = dealsByPitchId[pid]
+    if (!d) continue
+    if (d.stage === 'delivered') {
+      closedDealCount++
+      if (d.current_budget_amount && d.current_budget_currency) {
+        const cur = d.current_budget_currency
+        closedAccByCurrency.set(
+          cur,
+          (closedAccByCurrency.get(cur) ?? 0) + d.current_budget_amount,
+        )
+      }
+    } else if (d.stage === 'rejected') {
+      declinedCount++
+    } else {
+      inFlightCount++
+    }
+  }
+  let topClosedCurrency: string | null = null
+  let topClosedAmount = 0
+  for (const [cur, amt] of closedAccByCurrency.entries()) {
+    if (amt > topClosedAmount) {
+      topClosedAmount = amt
+      topClosedCurrency = cur
+    }
+  }
+
+  const contactBrandsRows = (contactBrandsResult.data as
+    | {
+        contact_id: string
+        role: string | null
+        contacts: {
+          id: string
+          display_name: string | null
+          channels: Array<{
+            kind: string
+            identifier: string
+            primary: boolean
+          }>
+        } | null
+      }[]
+    | null) ?? []
+
+  const contactsCount = new Set(contactBrandsRows.map((r) => r.contact_id)).size
+
+  // Role distribution sub-line for the Contacts stat cell.
+  const roleCounts: Record<string, number> = {}
+  for (const r of contactBrandsRows) {
+    if (r.role) roleCounts[r.role] = (roleCounts[r.role] ?? 0) + 1
+  }
+  const rolePartsArr: string[] = []
+  for (const [role, n] of Object.entries(roleCounts)) {
+    rolePartsArr.push(`${n} ${role}`)
+  }
+  const contactsSub = rolePartsArr.length > 0
+    ? rolePartsArr.join(' · ')
+    : null
+
+  // ─── FR-7 W71: BrandContactsTable per-row aggregations ─────────────
+  // For each contact_brands row, aggregate from the already-loaded
+  // detail.pitches + allDeals (no extra round trips). pitchesUnderBrand =
+  // pitches WHERE brand_id = X AND contact_id = Y. lastTouchDate = MAX of
+  // those pitches.created_at. lastCloseAmount/Currency/Date = most recent
+  // delivered deal for those pitches.
+  const otherBrandsByContact = new Map<string, number>()
+  if (contactBrandsRows.length > 0) {
+    const contactIds = Array.from(
+      new Set(contactBrandsRows.map((r) => r.contact_id)),
+    )
+    const otherBrandsResult = await supabase
+      .from('contact_brands')
+      .select('contact_id, brand_id')
+      .in('contact_id', contactIds)
+    for (const row of (otherBrandsResult.data ?? []) as Array<{
+      contact_id: string
+      brand_id: string
+    }>) {
+      if (row.brand_id === brandId) continue
+      otherBrandsByContact.set(
+        row.contact_id,
+        (otherBrandsByContact.get(row.contact_id) ?? 0) + 1,
+      )
+    }
+  }
+
+  const brandContactRows: BrandContactRow[] = contactBrandsRows
+    .filter((r) => r.contacts !== null)
+    .map((r) => {
+      const contact = r.contacts!
+      const pitchesForContact = detail.pitches.filter(
+        (p) => p.contact_id === r.contact_id,
+      )
+      const lastTouch = pitchesForContact[0]?.created_at ?? null
+      let lastCloseAmount: number | null = null
+      let lastCloseCurrency: string | null = null
+      let lastCloseDate: string | null = null
+      for (const p of pitchesForContact) {
+        const d = dealsByPitchId[p.id]
+        if (!d || d.stage !== 'delivered') continue
+        // Pick the deal with the latest updated_at among delivered ones.
+        if (!lastCloseDate || d.updated_at > lastCloseDate) {
+          lastCloseAmount = d.current_budget_amount ?? null
+          lastCloseCurrency = d.current_budget_currency ?? null
+          lastCloseDate = d.updated_at
+        }
+      }
+      return {
+        contactId: r.contact_id,
+        displayName: contact.display_name,
+        channels: (contact.channels ?? []).map((c) => ({
+          kind: c.kind as BrandContactRow['channels'][number]['kind'],
+          identifier: c.identifier,
+          primary: c.primary,
+        })),
+        role: (r.role as ContactRole | null) ?? null,
+        pitchesUnderBrand: pitchesForContact.length,
+        lastCloseAmount,
+        lastCloseCurrency,
+        lastCloseDate,
+        lastTouchDate: lastTouch,
+        otherBrandsCount: otherBrandsByContact.get(r.contact_id) ?? 0,
+      }
+    })
+    // Sort by recency of last touch (descending); contacts with no pitches
+    // under this brand sink to the bottom.
+    .sort((a, b) => {
+      if (!a.lastTouchDate && !b.lastTouchDate) return 0
+      if (!a.lastTouchDate) return 1
+      if (!b.lastTouchDate) return -1
+      return b.lastTouchDate.localeCompare(a.lastTouchDate)
+    })
+
   const repeatLabel = detail.pitchCount === 1 ? '1st touch' : 'Repeat customer'
   const kicker = detail.isUnknown
     ? `Unknown sender · ${detail.pitchCount} ${detail.pitchCount === 1 ? 'pitch' : 'pitches'}`
     : `${repeatLabel} · since ${formatFullDate(detail.firstContactAt)}`
+
+  const pitchesSubParts: string[] = []
+  if (closedDealCount > 0)
+    pitchesSubParts.push(
+      `${closedDealCount} closed`,
+    )
+  if (inFlightCount > 0) pitchesSubParts.push(`${inFlightCount} in flight`)
+  if (declinedCount > 0) pitchesSubParts.push(`${declinedCount} declined`)
+  const pitchesSub = pitchesSubParts.length > 0 ? pitchesSubParts.join(' · ') : null
 
   return (
     <div className="page">
@@ -122,38 +303,39 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
         </div>
       </div>
 
-      <div className="bd-headstrip">
-        <div className="bd-meta">
-          <div className="bd-meta-cell">
-            <span className="bd-meta-l">Pitches</span>
-            <span className="bd-meta-v">
-              {String(detail.pitchCount).padStart(2, '0')}
+      {/* FR-7 W71 — BrandStatsStrip replaces the pre-FR-7 5-cell bd-headstrip
+          per design canon §39 Surface B. First contact / Last contact / Avg
+          deal cells are dropped from this surface — they remain in the
+          page-sub line above for context. */}
+      <BrandStatsStrip
+        pitchesCount={detail.pitchCount}
+        pitchesSub={pitchesSub}
+        closedTotalAmount={topClosedAmount}
+        closedTotalCurrency={topClosedCurrency}
+        closedTotalSub={
+          closedDealCount > 0
+            ? `${closedDealCount} closed deal${closedDealCount === 1 ? '' : 's'}`
+            : 'No closed deals yet'
+        }
+        contactsCount={contactsCount}
+        contactsSub={contactsSub}
+      />
+
+      {/* FR-7 W71 — BrandContactsTable inserted between StatsStrip and
+          BrandHistoryTable per design canon §39 surface ordering. */}
+      <section className="brand-section">
+        <div className="brand-section-h">
+          <span className="brand-section-h-l">
+            Contacts
+            <span className="brand-section-h-l-meta">
+              {contactsCount === 0
+                ? 'none yet'
+                : `${contactsCount} ${contactsCount === 1 ? 'contact' : 'contacts'}`}
             </span>
-          </div>
-          <div className="bd-meta-cell">
-            <span className="bd-meta-l">Tracked total</span>
-            <TrackedTotal totals={detail.currencyTotals} />
-          </div>
-          <div className="bd-meta-cell">
-            <span className="bd-meta-l">Avg deal</span>
-            <AvgDealValue avgDeal={detail.avgDeal} />
-          </div>
+          </span>
         </div>
-        <div className="bd-meta cols-2">
-          <div className="bd-meta-cell">
-            <span className="bd-meta-l">First contact</span>
-            <span className="bd-meta-v" style={{ fontSize: 22 }}>
-              {formatFullDate(detail.firstContactAt)}
-            </span>
-          </div>
-          <div className="bd-meta-cell">
-            <span className="bd-meta-l">Last contact</span>
-            <span className="bd-meta-v" style={{ fontSize: 22 }}>
-              {formatFullDate(detail.lastContactAt)}
-            </span>
-          </div>
-        </div>
-      </div>
+        <BrandContactsTable rows={brandContactRows} />
+      </section>
 
       <BrandHistoryTable
         pitches={detail.pitches}
@@ -162,55 +344,5 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
         tagsByPitchId={tagsByPitchId}
       />
     </div>
-  )
-}
-
-function TrackedTotal({ totals }: { totals: { currency: string; amount: number }[] }) {
-  const [primary, secondary, ...rest] = totals
-  if (!primary) {
-    return <span className="bd-meta-v" style={{ fontSize: 18, color: 'var(--ink-4)' }}>—</span>
-  }
-  // Tracked total is the accent-highlighted cell per design.
-  const overflow = rest.length
-  return (
-    <>
-      <span className="bd-meta-v accent">
-        {formatCurrencyAmount(primary.currency, primary.amount)}
-        <sup>{primary.currency}</sup>
-      </span>
-      {(secondary || overflow > 0) && (
-        <span className="font-mono text-xs text-ink-3 mt-1">
-          {secondary &&
-            `+ ${formatCurrencyAmount(secondary.currency, secondary.amount)} ${secondary.currency}`}
-          {secondary && overflow > 0 && ' · '}
-          {overflow > 0 &&
-            `+ ${overflow} other ${overflow === 1 ? 'currency' : 'currencies'}`}
-        </span>
-      )}
-    </>
-  )
-}
-
-function AvgDealValue({
-  avgDeal,
-}: {
-  avgDeal: import('@/lib/pitch-stats').AvgDeal | null
-}) {
-  if (!avgDeal) {
-    return <span className="bd-meta-v" style={{ fontSize: 18, color: 'var(--ink-4)' }}>—</span>
-  }
-  const isMixed = avgDeal.pitchesInDominantCurrency < avgDeal.totalPitchesWithBudget
-  return (
-    <>
-      <span className="bd-meta-v">
-        {formatCurrencyAmount(avgDeal.currency, avgDeal.amount)}
-        <sup>{avgDeal.currency}</sup>
-      </span>
-      {isMixed && (
-        <span className="font-mono text-xs text-ink-3 mt-1">
-          ({avgDeal.pitchesInDominantCurrency} of {avgDeal.totalPitchesWithBudget} pitches in {avgDeal.currency})
-        </span>
-      )}
-    </>
   )
 }
