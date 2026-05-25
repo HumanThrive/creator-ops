@@ -54,6 +54,13 @@ export interface Pitch {
   source_channel: PitchSourceChannel | null
   source_subject: string | null
   user_notes: string | null
+  // FR-7 W64 — first-class entity FKs (nullable; ON DELETE SET NULL).
+  // Inbound pitches with parseable sender_email resolve all three at save
+  // time (per `/api/pitches/save`); outbound + NULL-sender_email pitches
+  // populate brand_id only.
+  brand_id: string | null
+  contact_id: string | null
+  thread_id: string | null
   created_at: string
   updated_at: string
 }

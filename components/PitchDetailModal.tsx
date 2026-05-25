@@ -305,25 +305,40 @@ export function PitchDetailModal({
         to: draft.source_subject,
       }
     }
-    const { error } = await supabase.rpc('update_pitch_with_activity', {
-      p_pitch_id: pitch.id,
-      p_brand_name: draft.brand_name,
-      p_sender_name: draft.sender_name,
-      p_deliverables: draft.deliverables,
-      p_budget_amount: draft.budget_amount,
-      p_budget_currency: draft.budget_currency,
-      p_budget_notes: pitch.budget_notes,
-      p_deadline: draft.deadline,
-      p_tag_slugs: tagSlugs,
-      p_ai_summary: pitch.ai_summary,
-      p_user_notes: pitch.user_notes,
-      p_field_diffs: { field_diffs: diffs },
-      p_industry: draft.industry,
-      p_sender_email: draft.sender_email,
-      p_source_channel: draft.source_channel,
-      p_source_subject: draft.source_subject,
+    // FR-7 W69: notes-chain pattern matches AddPitchModal — POST to
+    // /api/pitches/update with the typeahead-resolved FK overrides. Route
+    // forwards to update_pitch_with_activity; the RPC's COALESCE preserves
+    // existing FKs when an override is null (per AC7.6 default
+    // no-typeahead-action behavior).
+    const updateResp = await fetch('/api/pitches/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pitch_id: pitch.id,
+        brand_name: draft.brand_name,
+        sender_name: draft.sender_name,
+        deliverables: draft.deliverables,
+        budget_amount: draft.budget_amount,
+        budget_currency: draft.budget_currency,
+        budget_notes: pitch.budget_notes,
+        deadline: draft.deadline,
+        tag_slugs: tagSlugs,
+        ai_summary: pitch.ai_summary,
+        user_notes: pitch.user_notes,
+        field_diffs: { field_diffs: diffs },
+        industry: draft.industry,
+        sender_email: draft.sender_email,
+        source_channel: draft.source_channel,
+        source_subject: draft.source_subject,
+        brand_id: draft.brand_id_override,
+        contact_id: draft.contact_id_override,
+        thread_id: draft.thread_id_override,
+      }),
     })
-    if (error) throw new Error(error.message)
+    const updateJson: { success: boolean; error?: string } = await updateResp.json()
+    if (!updateJson.success) {
+      throw new Error(updateJson.error ?? 'update_failed')
+    }
     setMode('default')
     router.refresh()
   }
