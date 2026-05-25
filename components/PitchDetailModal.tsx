@@ -14,6 +14,7 @@ import { FactsStrip } from './pitch-detail/FactsStrip'
 import { DealCard, type DealCardDraft } from './pitch-detail/DealCard'
 import { NoDealPanel, pickLegitimacy, type LegitimacyVariant } from './pitch-detail/NoDealPanel'
 import { HistoryTimeline } from './pitch-detail/HistoryTimeline'
+import { RelationshipLens } from './RelationshipLens'
 import {
   EditDetailsOverlay,
   type PitchEditDraft,
@@ -542,6 +543,12 @@ export function PitchDetailModal({
             onBlur={handleNotesBlur}
           />
         </section>
+
+        {/* FR-7 W70 — Relationship Lens (V4 peer-of-history) sits between
+            Notes and History per design canon §38. AC4.4 drift gate: this
+            mount IS the lens fire — no banner / nudge / notification
+            surface fires the lens elsewhere. */}
+        <RelationshipLens pitch={pitch} />
 
         <HistoryTimeline
           pitch={pitch}

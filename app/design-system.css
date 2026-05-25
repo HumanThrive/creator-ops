@@ -5518,3 +5518,87 @@
   border-top: 1px solid var(--line-board);
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
+
+/* ─────────── RelationshipLens (FR-7 W70; lifted from CR-7 Surface A HTML, V4 peer-of-history variant) ─────────── */
+/* Shared core — the panel itself */
+.lens {
+  display: flex; flex-direction: column; gap: 14px;
+}
+.lens-summary {
+  font-family: var(--body); font-size: 14px; line-height: 1.45;
+  color: var(--ink-2); margin: 0;
+}
+.lens-summary b { color: var(--ink); font-weight: 600; }
+.lens-summary em { color: var(--accent); font-style: normal; font-weight: 600; }
+
+.lens-rows { display: flex; flex-direction: column; }
+.lens-row {
+  display: grid; grid-template-columns: 138px 1fr;
+  gap: 16px; align-items: baseline;
+  padding: 10px 0; border-bottom: 1px solid var(--line);
+}
+.lens-row:last-child { border-bottom: none; }
+.lens-row-l {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-4);
+}
+.lens-row-v {
+  font-family: var(--body); font-size: 13.5px;
+  line-height: 1.5; color: var(--ink-2);
+}
+.lens-row-v b { color: var(--ink); font-weight: 600; }
+.lens-row-v em { color: var(--accent); font-style: normal; font-weight: 500; }
+.lens-row-v .lens-row-sub {
+  display: block; font-family: var(--mono); font-size: 10.5px;
+  color: var(--ink-4); letter-spacing: 0.06em; margin-top: 2px;
+  font-style: italic;
+}
+
+.lens-nav {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding-top: 6px;
+}
+.lens-nav-btn {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  background: var(--paper); border: 1px solid var(--line-2);
+  color: var(--ink-2);
+  padding: 6px 11px 6px 14px; border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.lens-nav-btn:hover { border-color: var(--ink); color: var(--ink); }
+.lens-nav-btn .arr { color: var(--ink-4); font-size: 11px; }
+
+/* V4 placement · peer-of-history (slate card between Notes and History) */
+.lens-peer {
+  background: var(--paper-board);
+  border: 1px solid var(--line-board);
+  border-radius: 5px;
+  padding: 18px 20px;
+}
+
+/* Sparse v1 — first contact, no prior history */
+.lens.is-empty .lens-summary { color: var(--ink-3); font-style: italic; }
+.lens-empty-hint {
+  font-size: 13px; color: var(--ink-4); margin: 0;
+  font-style: italic; line-height: 1.5;
+}
+
+/* Outbound — dashed-border placeholder per design canon §38 (lens is inbound-only) */
+.lens.is-outbound {
+  background: var(--paper-3);
+  border: 1px dashed var(--line-2);
+  padding: 14px 18px;
+  border-radius: 5px;
+}
+.lens.is-outbound .lens-summary {
+  font-family: var(--body); font-size: 13.5px;
+  color: var(--ink-3); font-style: italic;
+}
+
+/* Loading state — keep the card frame, defer content until queries resolve */
+.lens.is-loading .lens-summary {
+  color: var(--ink-4); font-style: italic;
+}
