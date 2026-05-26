@@ -234,11 +234,17 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
   }
 
   return (
+    <>
+      <div className="subnav">
+        <Link href="/app" className="back">
+          <span>←</span>Back to App
+        </Link>
+        <span className="sep">·</span>
+        <span>People</span>
+        <span className="sep">·</span>
+        <span className="here">{displayName}</span>
+      </div>
     <div className="page">
-      <Link href="/app" className="page-back">
-        ← Back to app
-      </Link>
-
       <section className="person-head">
         <div className="person-head-avatar">{initials(displayName)}</div>
         <div className="person-head-body">
@@ -373,6 +379,7 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
         )}
       </section>
     </div>
+    </>
   )
 }
 

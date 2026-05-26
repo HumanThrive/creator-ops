@@ -472,7 +472,7 @@ function renderBrandHistory(
     return <>First pitch from <b>{brandName}</b></>
   }
   const parts: React.ReactNode[] = []
-  parts.push(<><b key="t">{history.total} prior pitches</b></>)
+  parts.push(<b key="t">{history.total} prior pitches</b>)
   if (history.delivered > 0) {
     const sumStr = formatCurrencyAmount(
       history.totalClosedCurrency ?? '',
@@ -541,9 +541,9 @@ function renderContactOutcomes(
   }
   const parts: React.ReactNode[] = []
   parts.push(
-    <>
-      <b key="d">{outcomes.delivered} of {outcomes.total}</b> closed
-    </>,
+    <span key="d">
+      <b>{outcomes.delivered} of {outcomes.total}</b> closed
+    </span>,
   )
   if (outcomes.delivered > 0 && outcomes.totalClosedValue > 0) {
     const sumStr = formatCurrencyAmount(

@@ -287,10 +287,17 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
   const pitchesSub = pitchesSubParts.length > 0 ? pitchesSubParts.join(' · ') : null
 
   return (
+    <>
+      <div className="subnav">
+        <Link href="/app/brands" className="back">
+          <span>←</span>Back to Brands
+        </Link>
+        <span className="sep">·</span>
+        <span>Brands</span>
+        <span className="sep">·</span>
+        <span className="here">{detail.displayName}</span>
+      </div>
     <div className="page">
-      <Link href="/app/brands" className="page-back">
-        ← All brands
-      </Link>
       <div className="page-head">
         <div className="page-head-l">
           <span className="kicker">{kicker}</span>
@@ -337,12 +344,26 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
         <BrandContactsTable rows={brandContactRows} />
       </section>
 
-      <BrandHistoryTable
-        pitches={detail.pitches}
-        dealsByPitchId={dealsByPitchId}
-        activitiesByPitchId={activitiesByPitchId}
-        tagsByPitchId={tagsByPitchId}
-      />
+      {/* FR-7 W71 smoke fix — wrap BrandHistoryTable in brand-section so
+          the "Pitch history" kicker matches design canon §39 (was missing
+          on first ship; caught at Founder smoke 2026-05-26). */}
+      <section className="brand-section">
+        <div className="brand-section-h">
+          <span className="brand-section-h-l">
+            Pitch history
+            <span className="brand-section-h-l-meta">
+              {detail.pitchCount === 1 ? '1 pitch' : `${detail.pitchCount} pitches · newest first`}
+            </span>
+          </span>
+        </div>
+        <BrandHistoryTable
+          pitches={detail.pitches}
+          dealsByPitchId={dealsByPitchId}
+          activitiesByPitchId={activitiesByPitchId}
+          tagsByPitchId={tagsByPitchId}
+        />
+      </section>
     </div>
+    </>
   )
 }
