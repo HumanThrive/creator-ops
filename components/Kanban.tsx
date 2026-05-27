@@ -75,7 +75,7 @@ export function Kanban({ items, direction, onDirectionChange }: KanbanProps) {
     items.find((item) => item.pitch.id === selectedPitchId)?.pitch ?? null
 
   const totalCount = filtered.length
-  const countNoun = direction === 'all' ? 'DEALS' : 'PITCHES'
+  const countNoun = 'PITCHES'
   // AC3.3 — `all` filter resolves to inbound-canonical for column headers
   // (Phase A is inbound-dominant; cards carry their own direction).
   const headerDirection: PitchDirection =
