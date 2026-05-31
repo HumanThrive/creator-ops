@@ -11,9 +11,11 @@ interface TopBarProps {
 
 export function TopBar({ initial }: TopBarProps) {
   const pathname = usePathname()
-  const active: 'pitches' | 'brands' = pathname.startsWith('/app/brands')
+  const active: 'pitches' | 'brands' | 'people' = pathname.startsWith('/app/brands')
     ? 'brands'
-    : 'pitches'
+    : pathname.startsWith('/app/people')
+      ? 'people'
+      : 'pitches'
 
   return (
     <header className="topbar">
@@ -26,6 +28,9 @@ export function TopBar({ initial }: TopBarProps) {
         </Link>
         <Link href="/app/brands" className={active === 'brands' ? 'active' : ''}>
           Brands
+        </Link>
+        <Link href="/app/people" className={active === 'people' ? 'active' : ''}>
+          People
         </Link>
       </nav>
       <div className="topbar-spacer" />

@@ -1,23 +1,78 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { BrandStatsStrip } from '@/components/BrandStatsStrip'
 import { brandSlug, formatCurrencyAmount } from '@/lib/pitch-stats'
 import { formatFullDate, formatRelativeTime } from '@/lib/format'
 import type { Pitch } from '@/lib/types/pitch'
 import type { Deal, DealStage } from '@/lib/types/deal'
 
-// FR-7 W72 — Contact detail page per design canon §40 Surface C
+// FR-7 W72 — Contact detail page per design canon §40 Surface C.
+// FR-8 #75 — extended with dual-route handler (uuid OR slug) + previous_slugs
+//            fallback + 301-redirect from old slug → current slug. Slug-NULL
+//            Contacts continue to route by uuid only (Delta 6).
 //
-// Route: /app/people/[person] where [person] = contact UUID.
-// W72 v1 uses ID-based URL (collision-free; slug-based deferred to follow-up
-// CR — design canon ":slug" framing held for the eventual SEO/sharing pass).
+// Route: /app/people/[person] where [person] = contact UUID OR slug.
 //
 // Renders: PersonHead + ChannelsStrip + StatsStrip + Stacked Brand cards.
 // Combined flat PitchHistory deferred per LD pick at slice (brand-card
 // grouping IS the per-Brand history view; the flat list is redundant at v1
 // scale of <20 pitches per contact).
+
+// uuid v4 detection — Postgres `gen_random_uuid()` always emits this shape.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+interface ResolvedContactBase {
+  id: string
+  display_name: string | null
+  channels: ChannelEntry[]
+  slug: string | null
+  previous_slugs: string[]
+}
+
+// Dual-route resolution. Returns the contact row + a non-null `redirectTo`
+// when the requested path-segment is a *prior* slug — caller redirects to
+// the current canonical slug. Returns `null` contact when not found.
+async function resolveContactByParam(
+  supabase: SupabaseClient,
+  param: string,
+): Promise<{ contact: ResolvedContactBase | null; redirectTo: string | null }> {
+  const isUuid = UUID_RE.test(param)
+
+  if (isUuid) {
+    const { data } = await supabase
+      .from('contacts')
+      .select('id, display_name, channels, slug, previous_slugs')
+      .eq('id', param)
+      .maybeSingle()
+    return { contact: (data as ResolvedContactBase | null) ?? null, redirectTo: null }
+  }
+
+  // Slug path — try current slug first.
+  const { data: slugMatch } = await supabase
+    .from('contacts')
+    .select('id, display_name, channels, slug, previous_slugs')
+    .eq('slug', param)
+    .maybeSingle()
+  if (slugMatch) {
+    return { contact: slugMatch as ResolvedContactBase, redirectTo: null }
+  }
+
+  // Fall back to previous_slugs membership; 301 → current canonical slug.
+  const { data: prevMatch } = await supabase
+    .from('contacts')
+    .select('id, display_name, channels, slug, previous_slugs')
+    .contains('previous_slugs', [param])
+    .maybeSingle()
+  if (prevMatch && (prevMatch as ResolvedContactBase).slug) {
+    const m = prevMatch as ResolvedContactBase
+    return { contact: m, redirectTo: `/app/people/${m.slug}` }
+  }
+
+  return { contact: null, redirectTo: null }
+}
 
 type ChannelKind =
   | 'Email'
@@ -67,15 +122,11 @@ interface PersonPageProps {
 export async function generateMetadata({
   params,
 }: PersonPageProps): Promise<Metadata> {
-  const { person: contactId } = await params
+  const { person: param } = await params
   const supabase = await createClient()
-  const { data } = await supabase
-    .from('contacts')
-    .select('display_name')
-    .eq('id', contactId)
-    .maybeSingle()
+  const { contact } = await resolveContactByParam(supabase, param)
   return {
-    title: data?.display_name ? `${data.display_name} · Contact` : 'Contact',
+    title: contact?.display_name ? `${contact.display_name} · Contact` : 'Contact',
   }
 }
 
@@ -93,16 +144,21 @@ interface ContactBrandRow {
 
 export default async function ContactDetailPage({ params }: PersonPageProps) {
   const supabase = await createClient()
-  const { person: contactId } = await params
+  const { person: param } = await params
 
-  // ─── Load the contact row + auth check (RLS handles per-user scope) ──
-  const contactRes = await supabase
-    .from('contacts')
-    .select('id, display_name, channels')
-    .eq('id', contactId)
-    .maybeSingle()
-  if (!contactRes.data) notFound()
-  const contact = contactRes.data as ContactRow
+  // ─── Dual-route resolution (FR-8 #75): uuid OR slug OR previous_slugs ─
+  const { contact: resolved, redirectTo } = await resolveContactByParam(
+    supabase,
+    param,
+  )
+  if (redirectTo) redirect(redirectTo) // 301 from prior slug → current slug
+  if (!resolved) notFound()
+  const contactId = resolved.id
+  const contact: ContactRow = {
+    id: resolved.id,
+    display_name: resolved.display_name,
+    channels: resolved.channels,
+  }
 
   // ─── Load all brand associations + pitches via pivots + deals ────────
   const [contactBrandsRes, contactPitchesRes] = await Promise.all([
