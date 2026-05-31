@@ -6,6 +6,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { BrandStatsStrip } from '@/components/BrandStatsStrip'
 import { BrandAssocRoleControl } from '@/components/BrandAssocRoleControl'
 import { BrandAssocReactivate } from '@/components/BrandAssocReactivate'
+import { PersonNameEditor } from '@/components/PersonNameEditor'
+import { ChannelsEditor } from '@/components/ChannelsEditor'
 import { brandSlug, formatCurrencyAmount } from '@/lib/pitch-stats'
 import { formatFullDate, formatRelativeTime } from '@/lib/format'
 import type { Pitch } from '@/lib/types/pitch'
@@ -103,17 +105,9 @@ const ROLE_CLASS: Record<ContactRole, string> = {
   Other: '',
 }
 
-const CHANNEL_KIND_CLASS: Record<ChannelKind, string> = {
-  Email: 'ch-email',
-  IG: 'ch-ig',
-  TikTok: 'ch-tt',
-  WhatsApp: 'ch-wa',
-  X: 'ch-x',
-  IRL: 'ch-irl',
-  Facebook: 'ch-facebook',
-  LinkedIn: 'ch-linkedin',
-  Website: 'ch-website',
-}
+// (Local CHANNEL_KIND_CLASS constant removed in FR-8 #77 — channel rendering
+// moved to <ChannelsEditor>. Shared mapping lives at @/lib/types/contact for
+// any future inline use.)
 
 const CURRENT_BRAND_WINDOW_DAYS = 90
 
@@ -325,10 +319,12 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
               ? `Tracked since ${formatFullDate(firstPitchAt)}`
               : 'New contact · no pitches yet'}
           </span>
-          <h1 className="person-h1">
-            {displayName}
-            <span className="dot">.</span>
-          </h1>
+          <PersonNameEditor
+            contactId={contactId}
+            initialDisplayName={displayName}
+            initialDisplayNameRaw={contact.display_name}
+            currentSlug={resolved.slug}
+          />
           <div className="person-meta">
             {primaryRole ? (
               <span>
@@ -357,21 +353,14 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
         </div>
       </section>
 
-      {contact.channels.length > 0 ? (
-        <section className="channels-strip">
-          <span className="channels-strip-h">Channels</span>
-          <div className="channels-strip-rows">
-            {contact.channels.map((ch, i) => (
-              <span key={i} className="channel-chip">
-                <span className={`ch-dot ${CHANNEL_KIND_CLASS[ch.kind]}`} />
-                {ch.identifier ? <span>{ch.identifier}</span> : null}
-                <span className="ch-label">{ch.kind}</span>
-                {ch.primary ? <span className="ch-primary">Primary</span> : null}
-              </span>
-            ))}
-          </div>
-        </section>
-      ) : null}
+      {/* FR-8 #77: ChannelsEditor handles both display + edit modes. Renders
+          the existing chip layout in display mode + the kind/identifier/Primary/
+          Remove + Add row editor in edit mode. Shows an Edit affordance even
+          when zero channels so the user can add the first one. */}
+      <ChannelsEditor
+        contactId={contactId}
+        initialChannels={contact.channels}
+      />
 
       <BrandStatsStrip
         pitchesCount={pitches.length}

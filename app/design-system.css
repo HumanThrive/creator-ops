@@ -6538,3 +6538,204 @@
   .modal-foot { flex-wrap: wrap; }
   .role-popover-menu { min-width: 180px; }
 }
+
+/* ============================================================================
+ * FR-8 S3 (slice #77): Contact detail edit (name + channels, ZERO-SHIFT)
+ * ============================================================================ */
+
+/* PersonNameEditor — wraps the H1 + dot + actions. ZERO-SHIFT: H1 dimensions
+   stay identical in display + edit modes; only the `is-edit` modifier adds an
+   underline accent. The dot stays adjacent in both modes (rendered outside the
+   contenteditable boundary so caret doesn't land on it). */
+.person-h1-wrap {
+  display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap;
+  position: relative;
+}
+.person-h1[contenteditable="true"],
+.person-h1.is-edit {
+  outline: none;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+  cursor: text;
+}
+.person-h1-dot { /* matches .person-h1 .dot rendering when present inside */
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  color: var(--accent);
+  display: inline;
+}
+.person-h1-actions {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-left: 12px; align-self: center;
+}
+.person-h1-err {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.10em; color: var(--accent);
+}
+
+/* Compact pill buttons used in inline editors (PersonNameEditor + ChannelsEditor
+   section-head action). */
+.btn-pill-mini {
+  background: var(--ink); color: var(--paper); border: 1px solid var(--ink);
+  border-radius: 999px; cursor: pointer;
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 5px 12px;
+  display: inline-flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+}
+.btn-pill-mini:hover { background: var(--accent); border-color: var(--accent); }
+.btn-pill-mini:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-pill-mini:disabled:hover { background: var(--ink); border-color: var(--ink); }
+
+.btn-ghost-mini {
+  background: transparent; color: var(--ink-3); border: 1px solid var(--line-2);
+  border-radius: 999px; cursor: pointer;
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 5px 12px;
+  display: inline-flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+}
+.btn-ghost-mini:hover { border-color: var(--ink); color: var(--ink); }
+.btn-ghost-mini:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-ghost-mini:disabled:hover { border-color: var(--line-2); color: var(--ink-3); }
+
+/* ChannelsEditor — display-mode head wrapper + edit-mode rows + add ghost row */
+.channels-strip.is-edit {
+  padding-bottom: 8px;
+}
+.channels-strip-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.channels-strip-h-sub {
+  margin-left: 8px;
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.10em; color: var(--ink-4);
+}
+.channels-strip-h-sub.is-accent { color: var(--accent); }
+.channels-strip-h-sub.is-error { color: var(--accent); }
+.channels-strip-empty {
+  padding: 14px 0;
+  font-family: var(--body); font-size: 13px; color: var(--ink-4);
+  font-style: italic;
+}
+
+.ch-edit-rows {
+  display: flex; flex-direction: column; gap: 6px;
+  container-type: inline-size;
+  container-name: chrows;
+}
+.ch-edit-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 8px; align-items: center;
+}
+.ch-edit-picker-wrap {
+  position: relative; display: inline-block;
+}
+.ch-edit-picker-wrap::before {
+  content: ""; position: absolute; left: 10px; top: 50%;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--ink-4); transform: translateY(-50%);
+  z-index: 1; pointer-events: none;
+}
+.ch-edit-picker-wrap.ch-email::before { background: var(--ch-email); }
+.ch-edit-picker-wrap.ch-ig::before { background: var(--ch-ig); }
+.ch-edit-picker-wrap.ch-tt::before { background: var(--ch-tt); }
+.ch-edit-picker-wrap.ch-wa::before { background: var(--ch-wa); }
+.ch-edit-picker-wrap.ch-x::before { background: var(--ch-x); }
+.ch-edit-picker-wrap.ch-irl::before { background: var(--ch-irl); }
+.ch-edit-picker-wrap.ch-facebook::before { background: var(--ch-facebook); }
+.ch-edit-picker-wrap.ch-linkedin::before { background: var(--ch-linkedin); }
+.ch-edit-picker-wrap.ch-website::before { background: var(--ch-website); }
+.ch-edit-picker {
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink);
+  background: var(--paper); border: 1px solid var(--line-2);
+  border-radius: 4px;
+  padding: 7px 26px 7px 24px;
+  appearance: none; -webkit-appearance: none;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%),
+                    linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position: calc(100% - 12px) 50%, calc(100% - 7px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.ch-edit-picker:focus { outline: none; border-color: var(--ink); }
+.ch-edit-input {
+  font-family: var(--body); font-size: 14px;
+  background: var(--paper); color: var(--ink);
+  border: 1px solid var(--line-2); border-radius: 4px;
+  padding: 7px 10px;
+  width: 100%; min-width: 0;  /* min-width:0 lets flex/grid input shrink past intrinsic */
+}
+.ch-edit-input:focus { outline: none; border-color: var(--ink); }
+.ch-edit-input.is-error { border-color: var(--accent); }
+.ch-edit-primary {
+  background: transparent; border: 1px solid var(--line-2); color: var(--ink-3);
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 5px 10px; border-radius: 999px; cursor: pointer;
+  white-space: nowrap;
+}
+.ch-edit-primary:hover { border-color: var(--ink); color: var(--ink); }
+.ch-edit-primary.is-on {
+  background: var(--ink); color: var(--paper); border-color: var(--ink);
+}
+.ch-edit-primary.is-on:hover { background: var(--accent); border-color: var(--accent); }
+.ch-edit-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.ch-edit-primary:disabled:hover { border-color: var(--line-2); color: var(--ink-3); }
+.ch-edit-remove {
+  background: transparent; border: 1px solid var(--line); color: var(--ink-4);
+  width: 28px; height: 28px; border-radius: 999px; cursor: pointer;
+  font-family: var(--mono); font-size: 11px;
+  display: flex; align-items: center; justify-content: center;
+}
+.ch-edit-remove:hover { border-color: var(--accent); color: var(--accent); }
+.ch-edit-remove:disabled { opacity: 0.4; cursor: not-allowed; }
+.ch-edit-remove:disabled:hover { border-color: var(--line); color: var(--ink-4); }
+
+.ch-edit-add {
+  width: 100%;
+  background: transparent;
+  border: 1px dashed var(--line-2); color: var(--ink-3);
+  border-radius: 4px; padding: 8px 12px;
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  cursor: pointer;
+  margin-top: 2px;
+}
+.ch-edit-add:hover { border-color: var(--ink); color: var(--ink); }
+.ch-edit-add:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Local container query for narrow row restack (per spec Delta 3 — NOT the
+   frame-wide @container app; so side-by-side desktop frames at ~550px stay
+   single-row). Triggers below 400px on the .ch-edit-rows container. */
+@container chrows (max-width: 400px) {
+  .ch-edit-row {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "picker input remove"
+      ". primary primary";
+    gap: 6px 8px;
+  }
+  .ch-edit-picker-wrap { grid-area: picker; }
+  .ch-edit-input { grid-area: input; }
+  .ch-edit-remove { grid-area: remove; }
+  .ch-edit-primary { grid-area: primary; justify-self: start; margin-left: -2px; }
+}
+
+@container app (max-width: 720px) {
+  .person-h1-wrap { flex-wrap: wrap; }
+  .person-h1-actions { margin-left: 0; margin-top: 6px; }
+  .channels-strip-head { flex-wrap: wrap; gap: 8px; }
+}
