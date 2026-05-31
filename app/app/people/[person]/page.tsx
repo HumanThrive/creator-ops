@@ -8,6 +8,7 @@ import { BrandAssocRoleControl } from '@/components/BrandAssocRoleControl'
 import { BrandAssocReactivate } from '@/components/BrandAssocReactivate'
 import { PersonNameEditor } from '@/components/PersonNameEditor'
 import { ChannelsEditor } from '@/components/ChannelsEditor'
+import { ContactDeleteAction } from '@/components/ContactDeleteAction'
 import { brandSlug, formatCurrencyAmount } from '@/lib/pitch-stats'
 import { formatFullDate, formatRelativeTime } from '@/lib/format'
 import type { Pitch } from '@/lib/types/pitch'
@@ -449,6 +450,15 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
           </div>
         )}
       </section>
+
+      {/* FR-8 #78: Delete affordance in a quiet footer "Other actions" zone.
+          Voice-ladder discipline keeps it understated (text-link, not a big red
+          button). Server-side block-if-linked → DeleteBlockedModal w/ path-cards;
+          zero-history → quiet delete + nav back to /app/people. */}
+      <ContactDeleteAction
+        contactId={contactId}
+        contactName={displayName}
+      />
     </div>
     </>
   )

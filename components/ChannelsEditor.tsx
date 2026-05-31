@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { ChannelEntry, ChannelKind } from '@/lib/types/contact'
 import { CHANNEL_KIND_CLASS } from '@/lib/types/contact'
+import { DupEmailCallout } from '@/components/DupEmailCallout'
 
 // FR-8 S3 (slice #77) — ChannelsEditor per spec Delta 3.
 // Display mode: renders the existing channels-strip (chip rows). Edit mode:
@@ -43,6 +44,7 @@ export function ChannelsEditor({ contactId, initialChannels }: ChannelsEditorPro
   )
   const [notice, setNotice] = useState<Notice>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [dupEmail, setDupEmail] = useState<string | null>(null)
   const newRowFocusRef = useRef<HTMLInputElement | null>(null)
   const justAddedRef = useRef(false)
 
@@ -70,6 +72,7 @@ export function ChannelsEditor({ contactId, initialChannels }: ChannelsEditorPro
 
   async function persist(next: ChannelEntry[]) {
     setSubmitting(true)
+    setDupEmail(null)
     try {
       const res = await fetch('/api/contacts/update', {
         method: 'POST',
@@ -77,6 +80,18 @@ export function ChannelsEditor({ contactId, initialChannels }: ChannelsEditorPro
         body: JSON.stringify({ contact_id: contactId, channels: next }),
       })
       const body = await res.json().catch(() => ({}))
+      // FR-8 #78 Delta 5: primary_email_collision (HTTP 409) renders the
+      // DupEmailCallout instead of the generic error notice. Identify the
+      // colliding Primary Email so the callout can display the value.
+      if (res.status === 409 && body.error === 'primary_email_collision') {
+        const offending =
+          next.find((c) => c.kind === 'Email' && c.primary)?.identifier?.trim() ??
+          ''
+        setDupEmail(offending || '(unknown email)')
+        // Revert to last-saved snapshot — Save was blocked per the callout sub-label.
+        setChannels(savedSnapshot.map((c) => ({ ...c })))
+        return
+      }
       if (!res.ok || !body.success) {
         throw new Error(body.error ?? `http_${res.status}`)
       }
@@ -85,7 +100,6 @@ export function ChannelsEditor({ contactId, initialChannels }: ChannelsEditorPro
       router.refresh()
     } catch (err) {
       setNotice({ kind: 'error', message: (err as Error).message })
-      // Revert local state to last-saved snapshot so UI and DB agree.
       setChannels(savedSnapshot.map((c) => ({ ...c })))
     } finally {
       setSubmitting(false)
@@ -245,6 +259,13 @@ export function ChannelsEditor({ contactId, initialChannels }: ChannelsEditorPro
           ✓ Done
         </button>
       </div>
+
+      {dupEmail ? (
+        <DupEmailCallout
+          email={dupEmail}
+          onDismiss={() => setDupEmail(null)}
+        />
+      ) : null}
 
       <div className="ch-edit-rows">
         {channels.map((ch, i) => {

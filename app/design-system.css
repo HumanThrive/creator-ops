@@ -6739,3 +6739,128 @@
   .person-h1-actions { margin-left: 0; margin-top: 6px; }
   .channels-strip-head { flex-wrap: wrap; gap: 8px; }
 }
+
+/* ============================================================================
+ * FR-8 S4 (slice #78): Delete + voice-ladder destructive copy
+ * ============================================================================ */
+
+/* Path-cards on DeleteBlockedModal — two equal-weight buttons-as-cards. */
+.path-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 6px;
+}
+.path-card {
+  background: var(--paper); border: 1px solid var(--line-2);
+  border-radius: 6px; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+  text-align: left; cursor: pointer;
+  color: var(--ink-2);
+  position: relative;
+  transition: border-color 0.15s ease-out, transform 0.05s ease-out;
+}
+.path-card:hover {
+  border-color: var(--ink); transform: translateY(-1px);
+}
+.path-card.is-recommended {
+  border-color: var(--accent); background: color-mix(in oklab, var(--accent) 6%, var(--paper));
+}
+.path-card.is-recommended:hover {
+  border-color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 10%, var(--paper));
+}
+.path-card-tag {
+  position: absolute; top: 8px; right: 10px;
+  font-family: var(--mono); font-size: 9px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 999px;
+  padding: 2px 7px;
+}
+.path-card-h {
+  font-family: var(--body); font-size: 15px; font-weight: 600;
+  color: var(--ink);
+}
+.path-card-p {
+  font-family: var(--body); font-size: 13px; line-height: 1.5;
+  color: var(--ink-3);
+}
+.path-card-cta {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink);
+  margin-top: 4px;
+}
+
+/* DupEmailCallout — inline accent-bordered card under the offending input. */
+.dup-email-callout {
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--accent) 4%, var(--paper));
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+  margin-bottom: 10px;
+}
+.dup-email-callout-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px;
+}
+.dup-email-callout-kicker {
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent);
+}
+.dup-email-callout-close {
+  background: transparent; border: none; cursor: pointer;
+  font-family: var(--mono); font-size: 12px; color: var(--ink-4);
+  padding: 0; line-height: 1;
+}
+.dup-email-callout-close:hover { color: var(--ink); }
+.dup-email-callout-p {
+  font-family: var(--body); font-size: 13.5px; line-height: 1.5;
+  color: var(--ink-2); margin: 0;
+}
+.dup-email-callout-p b { color: var(--ink); font-weight: 600; }
+.dup-email-callout-actions {
+  display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+.dup-email-callout-sub {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent);
+  margin-top: 2px;
+}
+
+/* Contact-detail "Other actions" footer — quiet delete affordance.
+   Voice-ladder discipline: text-link, not a destructive-red button. */
+.contact-danger-zone {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--line);
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+}
+.contact-danger-zone-l {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-4);
+}
+.contact-delete-link {
+  background: transparent; border: none; cursor: pointer;
+  font-family: var(--body); font-size: 13px; color: var(--ink-3);
+  padding: 4px 6px;
+  text-decoration: underline; text-decoration-color: var(--line-2);
+  text-underline-offset: 4px;
+}
+.contact-delete-link:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+.contact-delete-status {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.10em; color: var(--ink-4);
+}
+.contact-danger-zone-err {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.10em; color: var(--accent);
+  display: inline-flex; align-items: center;
+}
+
+@container app (max-width: 720px) {
+  .path-cards { grid-template-columns: 1fr; }
+}
