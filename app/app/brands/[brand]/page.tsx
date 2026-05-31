@@ -80,11 +80,14 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
     // table. Joined contact row gives display_name + channels; pivot gives
     // the per-Brand role enum. The join is RLS-safe per user_id denormalization
     // on the pivot table.
+    // FR-8 #76 AC5.6: filter to active associations only (ended_at IS NULL) —
+    // ended associations excluded from the brand's "current Contacts" table.
     brandId
       ? supabase
           .from('contact_brands')
           .select('contact_id, role, contacts(id, display_name, channels)')
           .eq('brand_id', brandId)
+          .is('ended_at', null)
       : Promise.resolve({
           data: [] as {
             contact_id: string
