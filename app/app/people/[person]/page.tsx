@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { BrandStatsStrip } from '@/components/BrandStatsStrip'
+import { BrandAssocRoleControl } from '@/components/BrandAssocRoleControl'
+import { BrandAssocReactivate } from '@/components/BrandAssocReactivate'
 import { brandSlug, formatCurrencyAmount } from '@/lib/pitch-stats'
 import { formatFullDate, formatRelativeTime } from '@/lib/format'
 import type { Pitch } from '@/lib/types/pitch'
@@ -139,6 +141,8 @@ interface ContactRow {
 interface ContactBrandRow {
   brand_id: string
   role: string | null
+  ended_at: string | null
+  ended_reason: string | null
   brands: { id: string; name: string } | null
 }
 
@@ -161,10 +165,14 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
   }
 
   // ─── Load all brand associations + pitches via pivots + deals ────────
+  // FR-8 #76 AC5.6: include ended associations in this load — the Contact-
+  // detail page renders them with the ENDED visual canon (Delta 4 — dashed
+  // border + dimmed head + ENDED tag + Reactivate pill in foot). The lens /
+  // BrandContactsTable surfaces filter ended_at NULL at their query boundary.
   const [contactBrandsRes, contactPitchesRes] = await Promise.all([
     supabase
       .from('contact_brands')
-      .select('brand_id, role, brands(id, name)')
+      .select('brand_id, role, ended_at, ended_reason, brands(id, name)')
       .eq('contact_id', contactId),
     supabase
       .from('contact_pitches')
@@ -222,9 +230,16 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
   // most recent pitch within the last 90 days. "Concurrent client" pill
   // (middleman case): when a Contact has 2+ Brand-associations with
   // overlapping active windows (defined as a pitch in the last 90 days for
-  // each Brand). v1 ships the simple form; design canon's stress-test
-  // "connector case" lands fully at FR-8 (when the Connector pattern earns
-  // its own treatment per design canon §40 Marcus card).
+  // each Brand).
+  // FR-8 #76 AC5.6: ended associations are excluded from active heuristics
+  // (Current / Concurrent / Prior). They get their own ENDED tag (overrides
+  // all three) + Variant 1 visual treatment (dashed border + dimmed head +
+  // Reactivate pill). Build the ended-id set up-front so the recent/all maps
+  // skip those brand_ids entirely.
+  const endedBrandIds = new Set<string>()
+  for (const cb of contactBrands) {
+    if (cb.ended_at) endedBrandIds.add(cb.brand_id)
+  }
   const now = Date.now()
   const DAY_MS = 24 * 60 * 60 * 1000
   const recentByBrandId = new Map<string, number>() // brand_id -> count of pitches in last N days
@@ -235,8 +250,9 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
     bucket.push(p)
     allByBrandId.set(p.brand_id, bucket)
     if (
+      !endedBrandIds.has(p.brand_id) &&
       now - new Date(p.created_at).getTime() <
-      CURRENT_BRAND_WINDOW_DAYS * DAY_MS
+        CURRENT_BRAND_WINDOW_DAYS * DAY_MS
     ) {
       recentByBrandId.set(p.brand_id, (recentByBrandId.get(p.brand_id) ?? 0) + 1)
     }
@@ -409,24 +425,34 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
               const brand = cb.brands
               if (!brand) return null
               const brandPitches = allByBrandId.get(brand.id) ?? []
-              const isCurrent = brand.id === currentBrandId
+              const isEnded = cb.ended_at !== null
+              const isCurrent = !isEnded && brand.id === currentBrandId
               const recentCount = recentByBrandId.get(brand.id) ?? 0
-              const tag: { label: string; cls: string } | null = isCurrent
-                ? { label: 'Current', cls: '' }
-                : isConcurrentMultiBrand && recentCount > 0
-                  ? { label: 'Concurrent', cls: 'is-concurrent' }
-                  : recentCount === 0 && brandPitches.length > 0
-                    ? { label: 'Prior', cls: 'is-prior' }
-                    : null
+              // ENDED tag overrides Current/Concurrent/Prior per Delta 4.
+              const tag: { label: string; cls: string } | null = isEnded
+                ? {
+                    label: `ENDED · ${formatMonYear(cb.ended_at!)}`,
+                    cls: 'is-ended',
+                  }
+                : isCurrent
+                  ? { label: 'Current', cls: '' }
+                  : isConcurrentMultiBrand && recentCount > 0
+                    ? { label: 'Concurrent', cls: 'is-concurrent' }
+                    : recentCount === 0 && brandPitches.length > 0
+                      ? { label: 'Prior', cls: 'is-prior' }
+                      : null
               return (
                 <BrandCard
                   key={brand.id}
+                  contactId={contactId}
+                  contactName={displayName}
                   brandId={brand.id}
                   brandName={brand.name}
                   role={(cb.role as ContactRole | null) ?? null}
                   pitches={brandPitches}
                   dealByPitchId={dealByPitchId}
                   isCurrent={isCurrent}
+                  isEnded={isEnded}
                   tag={tag}
                 />
               )
@@ -440,31 +466,40 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
 }
 
 interface BrandCardProps {
+  contactId: string
+  contactName: string
   brandId: string
   brandName: string
   role: ContactRole | null
   pitches: Pitch[]
   dealByPitchId: Map<string, Deal>
   isCurrent: boolean
+  isEnded: boolean
   tag: { label: string; cls: string } | null
 }
 
 function BrandCard({
+  contactId,
+  contactName,
+  brandId,
   brandName,
   role,
   pitches,
   dealByPitchId,
   isCurrent,
+  isEnded,
   tag,
 }: BrandCardProps) {
   const lastPitchDate = pitches[0]?.created_at ?? null
   let closedAmount = 0
   let closedCurrency: string | null = null
+  let closedCount = 0
   for (const p of pitches) {
     const d = dealByPitchId.get(p.id)
     if (d?.stage === 'delivered' && d.current_budget_amount) {
       closedAmount += d.current_budget_amount
       closedCurrency = closedCurrency ?? d.current_budget_currency ?? null
+      closedCount += 1
     }
   }
   const closedDisplay =
@@ -472,8 +507,18 @@ function BrandCard({
       ? formatCurrencyAmount(closedCurrency, closedAmount)
       : null
 
+  // ENDED card variants per Delta 4: dashed border + dimmed head + ENDED tag
+  // (tag already computed by parent + passed in `tag`).
+  const cardClass = [
+    'brand-card',
+    isCurrent ? 'is-current' : '',
+    isEnded ? 'is-ended' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <article className={`brand-card ${isCurrent ? 'is-current' : ''}`}>
+    <article className={cardClass}>
       <header className="brand-card-h">
         <div className="brand-card-avatar">{initials(brandName)}</div>
         <div className="brand-card-id">
@@ -491,7 +536,17 @@ function BrandCard({
             ) : null}
           </Link>
           <span className="brand-card-sub">
-            {role ?? 'unspecified role'}
+            <BrandAssocRoleControl
+              contactId={contactId}
+              brandId={brandId}
+              brandName={brandName}
+              contactName={contactName}
+              initialRole={role}
+              pitchCountForPair={pitches.length}
+              closedDealCount={closedCount}
+              closedDealAmountDisplay={closedDisplay}
+              variant="card-foot"
+            />
             {lastPitchDate ? ` · last ${formatRelativeTime(lastPitchDate)}` : ''}
             {` · ${pitches.length} ${pitches.length === 1 ? 'pitch' : 'pitches'}`}
           </span>
@@ -571,8 +626,23 @@ function BrandCard({
           </>
         )}
       </div>
+      {isEnded ? (
+        <footer className="brand-card-foot">
+          <BrandAssocReactivate contactId={contactId} brandId={brandId} />
+        </footer>
+      ) : null}
     </article>
   )
+}
+
+const FULL_MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+] as const
+
+function formatMonYear(iso: string): string {
+  const d = new Date(iso)
+  return `${FULL_MONTHS[d.getMonth()].toUpperCase()} ${d.getFullYear()}`
 }
 
 function initials(name: string | null | undefined): string {

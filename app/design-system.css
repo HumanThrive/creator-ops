@@ -6283,3 +6283,258 @@
   .people-empty { padding: 28px 20px; }
   .stat-cell-v.stat-cell-v-text { font-size: 18px; }
 }
+
+/* ============================================================================
+ * FR-8 S5 (slice #76): Brand-assoc management — RolePopover + UnlinkModal +
+ *                       ENDED canon Variant 1 + Reactivate pill
+ * ============================================================================ */
+
+/* RolePopover — inline trigger + dropdown menu. Used on Contact-detail
+   stacked Brand card AND BrandContactsTable row. */
+.role-popover {
+  position: relative; display: inline-block;
+  vertical-align: middle;
+}
+.role-popover-menu {
+  position: absolute; left: 0; top: calc(100% + 6px);
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 5px;
+  box-shadow: 0 12px 28px -8px rgba(10, 14, 28, 0.30);
+  padding: 6px;
+  min-width: 200px;
+  display: flex; flex-direction: column; gap: 1px;
+  z-index: 50;
+  text-transform: none; letter-spacing: 0;
+}
+.role-popover-item {
+  background: transparent; border: none; cursor: pointer;
+  font-family: var(--body); font-size: 13px;
+  color: var(--ink-2);
+  padding: 8px 12px; text-align: left;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+}
+.role-popover-item:hover { background: var(--paper-2); color: var(--ink); }
+.role-popover-item.is-on { color: var(--ink); font-weight: 500; }
+.role-popover-item .check {
+  color: var(--accent); font-family: var(--mono); font-size: 11px;
+}
+.role-popover-item.is-danger {
+  color: var(--accent);
+  border-top: 1px dashed var(--line);
+  margin-top: 4px; padding-top: 10px;
+}
+
+/* Saved/Reverted/Error inline notice strip after auto-save. Renders next to
+   the trigger; absolute-positioned so it doesn't push surrounding layout. */
+.role-popover-notice {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-3);
+  background: var(--paper);
+  border: 1px solid var(--line-2); border-radius: 999px;
+  padding: 4px 10px;
+  display: inline-flex; align-items: center; gap: 8px;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px -4px rgba(10, 14, 28, 0.15);
+  animation: role-popover-notice-fade 0.2s ease-out;
+}
+.role-popover-notice.is-error {
+  color: var(--accent); border-color: var(--accent);
+}
+.role-popover-notice.is-reverted { color: var(--ink); }
+@keyframes role-popover-notice-fade {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Inline-edit role-pill — trigger for the RolePopover. Mirrors .ctc-role
+   visual but with a caret hint + clickable surface. */
+.role-pill-edit {
+  background: var(--paper); border: 1px solid var(--line-2);
+  color: var(--ink-2); cursor: pointer;
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 4px 22px 4px 10px; border-radius: 3px;
+  position: relative;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.role-pill-edit::after {
+  content: ""; position: absolute; right: 9px; top: 50%;
+  width: 6px; height: 6px;
+  border-right: 1px solid var(--ink-4);
+  border-bottom: 1px solid var(--ink-4);
+  transform: translateY(-65%) rotate(45deg);
+}
+.role-pill-edit:hover { border-color: var(--ink); color: var(--ink); }
+.role-pill-edit.is-pr { color: var(--ink-2); }
+.role-pill-edit.is-brand-team { color: var(--ink); border-color: var(--ink-3); }
+.role-pill-edit.is-connector { color: var(--accent); border-color: var(--accent); }
+.role-pill-edit.is-founder {
+  color: var(--ink-2); border-color: var(--ink-3); border-style: dashed;
+}
+.role-pill-edit.is-other { color: var(--ink-4); border-color: var(--line); }
+.role-pill-edit.is-empty {
+  color: var(--ink-4); border-color: var(--line); border-style: dashed;
+}
+
+/* Compact action pill (Cancel / Undo / Reactivate / Remove in modal foot
+   + brand-card foot). */
+.row-action-pill {
+  background: transparent; border: 1px solid var(--line-2); color: var(--ink-3);
+  border-radius: 999px; padding: 4px 10px;
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px;
+  white-space: nowrap;
+}
+.row-action-pill:hover { border-color: var(--ink); color: var(--ink); }
+.row-action-pill:disabled { opacity: 0.5; cursor: not-allowed; }
+.row-action-pill:disabled:hover { border-color: var(--line-2); color: var(--ink-3); }
+.row-action-pill.is-warn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Warn variant of the canonical btn-pill (used as primary `End relationship`
+   button in UnlinkModal's soft branch). Reuses btn-pill base typography. */
+.btn-pill.is-warn {
+  background: var(--paper); color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.btn-pill.is-warn:hover { background: var(--accent); color: var(--paper); }
+
+/* contacts-table-row overflow:visible variant — needed when row contains a
+   popover that must escape the row's overflow boundary (Delta 4 explicit). */
+.contacts-table-row.is-overflow-visible { overflow: visible; }
+/* Lifting the whole table's overflow:hidden too, since the row sits inside
+   the table wrapper which has overflow:hidden by default (line 5714). */
+.contacts-table:has(.is-overflow-visible) { overflow: visible; }
+
+/* ─── ENDED canon Variant 1 on stacked Brand card (Delta 4) ─────────────
+   Dashed border + dimmed head opacity ~0.78 + ENDED · MON YYYY tag + foot
+   carries the Reactivate pill. Card stays in chain order (per spec). */
+.brand-card.is-ended {
+  border-color: var(--line-board);
+  border-style: dashed;
+}
+.brand-card.is-ended .brand-card-h { opacity: 0.78; }
+.brand-card.is-ended .brand-card-body { opacity: 0.88; }
+.brand-card-name-tag.is-ended {
+  color: var(--ink-3);
+  border-color: var(--ink-3);
+  border-style: dashed;
+  background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 3px; border-width: 1px;
+}
+.brand-card-foot {
+  padding: 10px 16px;
+  border-top: 1px dashed var(--line);
+  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+  background: var(--paper);
+}
+.brand-card-reactivate {
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.brand-card-reactivate-err {
+  font-family: var(--mono); font-size: 9.5px;
+  letter-spacing: 0.10em; color: var(--accent);
+}
+
+/* ─── UnlinkModal (uses pitch-modal-overlay backdrop; pitch-modal-close X) ─ */
+.modal-card {
+  background: var(--paper);
+  border: 1px solid var(--ink); border-radius: 6px;
+  width: 100%; max-width: 560px;
+  display: flex; flex-direction: column;
+  box-shadow: 0 16px 48px -8px rgba(10, 14, 28, 0.35);
+  margin: auto;
+  max-height: 88vh; overflow-y: auto;
+}
+.modal-band {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-board);
+}
+.modal-band-l {
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.modal-band-l::before {
+  content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+}
+.modal-body {
+  padding: 24px; display: flex; flex-direction: column; gap: 16px;
+}
+.modal-h {
+  font-family: var(--display); font-weight: 400;
+  font-size: clamp(28px, 4.5vw, 40px);
+  line-height: 0.95; letter-spacing: 0.005em;
+  text-transform: uppercase; color: var(--ink); margin: 0;
+}
+.modal-h .dot { color: var(--accent); }
+.modal-p {
+  font-family: var(--body); font-size: 14px; line-height: 1.55;
+  color: var(--ink-2); margin: 0;
+}
+.modal-p b { color: var(--ink); font-weight: 600; }
+.modal-p em { color: var(--ink); font-style: italic; }
+
+.modal-block {
+  border: 1px solid var(--line-2); border-radius: 4px;
+  padding: 14px 16px;
+  background: var(--paper-board);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.modal-block-h {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3);
+}
+.modal-block-list {
+  margin: 0; padding-left: 18px;
+  display: flex; flex-direction: column; gap: 6px;
+  font-family: var(--body); font-size: 13px; color: var(--ink-2);
+  line-height: 1.5;
+}
+.modal-block-list li em { color: var(--ink); font-style: italic; }
+
+.modal-field { display: flex; flex-direction: column; gap: 6px; }
+.modal-field-l {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+}
+.modal-field-opt {
+  color: var(--ink-4); font-style: italic; margin-left: 4px;
+}
+.modal-field-input {
+  font-family: var(--body); font-size: 13.5px;
+  background: var(--paper); color: var(--ink);
+  border: 1px solid var(--line-2); border-radius: 4px;
+  padding: 8px 12px; width: 100%;
+  resize: vertical; min-height: 64px;
+}
+.modal-field-input:focus { outline: none; border-color: var(--ink); }
+
+.modal-foot {
+  border-top: 1px solid var(--line);
+  padding: 14px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+  background: var(--paper);
+}
+.modal-foot-help {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+
+@container app (max-width: 720px) {
+  .modal-card { max-width: 100%; max-height: 92vh; }
+  .modal-body { padding: 18px; gap: 14px; }
+  .modal-h { font-size: clamp(24px, 7vw, 32px); }
+  .modal-foot { flex-wrap: wrap; }
+  .role-popover-menu { min-width: 180px; }
+}

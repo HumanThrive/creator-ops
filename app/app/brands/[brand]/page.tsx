@@ -344,7 +344,11 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
             </span>
           </span>
         </div>
-        <BrandContactsTable rows={brandContactRows} />
+        <BrandContactsTable
+          rows={brandContactRows}
+          brandId={brandId ?? ''}
+          brandName={detail.displayName}
+        />
       </section>
 
       {/* FR-7 W71 smoke fix — wrap BrandHistoryTable in brand-section so
