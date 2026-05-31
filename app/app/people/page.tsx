@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { PeopleList } from '@/components/PeopleList'
 import { PeopleStatsStrip } from '@/components/PeopleStatsStrip'
+import { NewContactTrigger } from '@/components/NewContactTrigger'
 import {
   computeContactSummaries,
   computePeopleStats,
@@ -167,12 +168,7 @@ function PeopleEmptyState() {
         Contacts land here as you save pitches &mdash; or add someone you met
         outside an inbound pitch.
       </p>
-      {/* TODO FR-8 S2 (#79): wire to standalone-create modal (EntityTypeahead
-          Creating-mode). For S1 ship the affordance is present but visual only;
-          full wiring lands at #79. */}
-      <button type="button" className="btn-pill" disabled aria-disabled="true">
-        + New Contact <span className="opacity-60">(coming in S2)</span>
-      </button>
+      <NewContactTrigger className="btn-pill" />
     </div>
   )
 }

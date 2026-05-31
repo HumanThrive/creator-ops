@@ -6864,3 +6864,14 @@
 @container app (max-width: 720px) {
   .path-cards { grid-template-columns: 1fr; }
 }
+
+/* ============================================================================
+ * FR-8 S2 (slice #79): NewContactModal — minor additions
+ * ============================================================================ */
+
+.ch-edit-empty {
+  font-family: var(--body); font-size: 13px; color: var(--ink-4);
+  font-style: italic;
+  padding: 10px 0;
+}
+.new-contact-modal { max-width: 540px; }

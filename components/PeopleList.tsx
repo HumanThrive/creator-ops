@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import type { ContactSummary } from '@/lib/contact-stats'
 import { CHANNEL_KIND_CLASS, ROLE_CLASS } from '@/lib/types/contact'
 import { formatRelativeTime } from '@/lib/format'
+import { NewContactTrigger } from '@/components/NewContactTrigger'
 
 // FR-8 S1 (slice #75) — `/app/people` list component per spec Delta 2.
 // Variant B 7-col row (locked); search + sort URL-persisted; multi-role +N
@@ -99,17 +100,7 @@ export function PeopleList({ contacts, totalCount, query, sort }: PeopleListProp
               A → Z
             </button>
           </div>
-          {/* TODO FR-8 S2 (#79): wire to standalone-create modal. Visual
-              affordance present for #75; full wiring lands at #79. */}
-          <button
-            type="button"
-            className="section-action"
-            disabled
-            aria-disabled="true"
-            title="Coming in FR-8 S2"
-          >
-            + New Contact
-          </button>
+          <NewContactTrigger />
         </div>
       </div>
 
