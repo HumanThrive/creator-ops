@@ -1,9 +1,13 @@
 import Link from 'next/link'
 import { formatCurrencyAmount } from '@/lib/pitch-stats'
+import { BrandAssocRoleControl } from '@/components/BrandAssocRoleControl'
 
 // FR-7 W71 — BrandContactsTable per design canon §39 Surface B.
 // 7-column row grid: Contact · Role · Channels · Pitches · Last close · Last touch · Arrow.
 // W72 wired rows as <Link href="/app/people/[id]"> per design canon.
+// FR-8 #76 — Role cell replaced with BrandAssocRoleControl (variant='table-row');
+//   container overflow:visible so the role popover can escape; popover stops
+//   propagation to keep row click-to-detail working. Per spec Delta 4.
 
 type ChannelKind =
   | 'Email'
@@ -66,9 +70,15 @@ export interface BrandContactRow {
 
 interface BrandContactsTableProps {
   rows: BrandContactRow[]
+  brandId: string
+  brandName: string
 }
 
-export function BrandContactsTable({ rows }: BrandContactsTableProps) {
+export function BrandContactsTable({
+  rows,
+  brandId,
+  brandName,
+}: BrandContactsTableProps) {
   if (rows.length === 0) {
     return (
       <div className="contacts-empty">
@@ -99,7 +109,7 @@ export function BrandContactsTable({ rows }: BrandContactsTableProps) {
         <Link
           key={row.contactId}
           href={`/app/people/${row.contactId}`}
-          className="contacts-table-row"
+          className="contacts-table-row is-overflow-visible"
         >
           <div className="ctc-name">
             <div className="ctc-avatar">{initials(row.displayName)}</div>
@@ -122,15 +132,26 @@ export function BrandContactsTable({ rows }: BrandContactsTableProps) {
               )}
             </div>
           </div>
-          {row.role ? (
-            <span className={`ctc-role ${ROLE_CLASS[row.role]}`}>
-              {row.role}
-            </span>
-          ) : (
-            <span className="ctc-role" style={{ opacity: 0.4 }}>
-              —
-            </span>
-          )}
+          <BrandAssocRoleControl
+            contactId={row.contactId}
+            brandId={brandId}
+            brandName={brandName}
+            contactName={row.displayName ?? '(no name)'}
+            initialRole={row.role}
+            pitchCountForPair={row.pitchesUnderBrand}
+            closedDealCount={
+              row.lastCloseAmount && row.lastCloseAmount > 0 ? 1 : 0
+            }
+            closedDealAmountDisplay={
+              row.lastCloseAmount && row.lastCloseAmount > 0 && row.lastCloseCurrency
+                ? formatCurrencyAmount(row.lastCloseCurrency, row.lastCloseAmount)
+                : null
+            }
+            variant="table-row"
+          />
+          {/* (Local ROLE_CLASS constant retained at top of file for future
+              reference; BrandAssocRoleControl reads from the shared
+              `@/lib/types/contact` map at runtime.) */}
           <span className="ctc-channels">
             {row.channels.slice(0, 4).map((ch, i) => (
               <span

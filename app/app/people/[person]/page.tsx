@@ -1,23 +1,83 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { BrandStatsStrip } from '@/components/BrandStatsStrip'
+import { BrandAssocRoleControl } from '@/components/BrandAssocRoleControl'
+import { BrandAssocReactivate } from '@/components/BrandAssocReactivate'
+import { PersonNameEditor } from '@/components/PersonNameEditor'
+import { ChannelsEditor } from '@/components/ChannelsEditor'
+import { ContactDeleteAction } from '@/components/ContactDeleteAction'
 import { brandSlug, formatCurrencyAmount } from '@/lib/pitch-stats'
 import { formatFullDate, formatRelativeTime } from '@/lib/format'
 import type { Pitch } from '@/lib/types/pitch'
 import type { Deal, DealStage } from '@/lib/types/deal'
 
-// FR-7 W72 — Contact detail page per design canon §40 Surface C
+// FR-7 W72 — Contact detail page per design canon §40 Surface C.
+// FR-8 #75 — extended with dual-route handler (uuid OR slug) + previous_slugs
+//            fallback + 301-redirect from old slug → current slug. Slug-NULL
+//            Contacts continue to route by uuid only (Delta 6).
 //
-// Route: /app/people/[person] where [person] = contact UUID.
-// W72 v1 uses ID-based URL (collision-free; slug-based deferred to follow-up
-// CR — design canon ":slug" framing held for the eventual SEO/sharing pass).
+// Route: /app/people/[person] where [person] = contact UUID OR slug.
 //
 // Renders: PersonHead + ChannelsStrip + StatsStrip + Stacked Brand cards.
 // Combined flat PitchHistory deferred per LD pick at slice (brand-card
 // grouping IS the per-Brand history view; the flat list is redundant at v1
 // scale of <20 pitches per contact).
+
+// uuid v4 detection — Postgres `gen_random_uuid()` always emits this shape.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+interface ResolvedContactBase {
+  id: string
+  display_name: string | null
+  channels: ChannelEntry[]
+  slug: string | null
+  previous_slugs: string[]
+}
+
+// Dual-route resolution. Returns the contact row + a non-null `redirectTo`
+// when the requested path-segment is a *prior* slug — caller redirects to
+// the current canonical slug. Returns `null` contact when not found.
+async function resolveContactByParam(
+  supabase: SupabaseClient,
+  param: string,
+): Promise<{ contact: ResolvedContactBase | null; redirectTo: string | null }> {
+  const isUuid = UUID_RE.test(param)
+
+  if (isUuid) {
+    const { data } = await supabase
+      .from('contacts')
+      .select('id, display_name, channels, slug, previous_slugs')
+      .eq('id', param)
+      .maybeSingle()
+    return { contact: (data as ResolvedContactBase | null) ?? null, redirectTo: null }
+  }
+
+  // Slug path — try current slug first.
+  const { data: slugMatch } = await supabase
+    .from('contacts')
+    .select('id, display_name, channels, slug, previous_slugs')
+    .eq('slug', param)
+    .maybeSingle()
+  if (slugMatch) {
+    return { contact: slugMatch as ResolvedContactBase, redirectTo: null }
+  }
+
+  // Fall back to previous_slugs membership; 301 → current canonical slug.
+  const { data: prevMatch } = await supabase
+    .from('contacts')
+    .select('id, display_name, channels, slug, previous_slugs')
+    .contains('previous_slugs', [param])
+    .maybeSingle()
+  if (prevMatch && (prevMatch as ResolvedContactBase).slug) {
+    const m = prevMatch as ResolvedContactBase
+    return { contact: m, redirectTo: `/app/people/${m.slug}` }
+  }
+
+  return { contact: null, redirectTo: null }
+}
 
 type ChannelKind =
   | 'Email'
@@ -46,17 +106,9 @@ const ROLE_CLASS: Record<ContactRole, string> = {
   Other: '',
 }
 
-const CHANNEL_KIND_CLASS: Record<ChannelKind, string> = {
-  Email: 'ch-email',
-  IG: 'ch-ig',
-  TikTok: 'ch-tt',
-  WhatsApp: 'ch-wa',
-  X: 'ch-x',
-  IRL: 'ch-irl',
-  Facebook: 'ch-facebook',
-  LinkedIn: 'ch-linkedin',
-  Website: 'ch-website',
-}
+// (Local CHANNEL_KIND_CLASS constant removed in FR-8 #77 — channel rendering
+// moved to <ChannelsEditor>. Shared mapping lives at @/lib/types/contact for
+// any future inline use.)
 
 const CURRENT_BRAND_WINDOW_DAYS = 90
 
@@ -67,15 +119,11 @@ interface PersonPageProps {
 export async function generateMetadata({
   params,
 }: PersonPageProps): Promise<Metadata> {
-  const { person: contactId } = await params
+  const { person: param } = await params
   const supabase = await createClient()
-  const { data } = await supabase
-    .from('contacts')
-    .select('display_name')
-    .eq('id', contactId)
-    .maybeSingle()
+  const { contact } = await resolveContactByParam(supabase, param)
   return {
-    title: data?.display_name ? `${data.display_name} · Contact` : 'Contact',
+    title: contact?.display_name ? `${contact.display_name} · Contact` : 'Contact',
   }
 }
 
@@ -88,27 +136,38 @@ interface ContactRow {
 interface ContactBrandRow {
   brand_id: string
   role: string | null
+  ended_at: string | null
+  ended_reason: string | null
   brands: { id: string; name: string } | null
 }
 
 export default async function ContactDetailPage({ params }: PersonPageProps) {
   const supabase = await createClient()
-  const { person: contactId } = await params
+  const { person: param } = await params
 
-  // ─── Load the contact row + auth check (RLS handles per-user scope) ──
-  const contactRes = await supabase
-    .from('contacts')
-    .select('id, display_name, channels')
-    .eq('id', contactId)
-    .maybeSingle()
-  if (!contactRes.data) notFound()
-  const contact = contactRes.data as ContactRow
+  // ─── Dual-route resolution (FR-8 #75): uuid OR slug OR previous_slugs ─
+  const { contact: resolved, redirectTo } = await resolveContactByParam(
+    supabase,
+    param,
+  )
+  if (redirectTo) redirect(redirectTo) // 301 from prior slug → current slug
+  if (!resolved) notFound()
+  const contactId = resolved.id
+  const contact: ContactRow = {
+    id: resolved.id,
+    display_name: resolved.display_name,
+    channels: resolved.channels,
+  }
 
   // ─── Load all brand associations + pitches via pivots + deals ────────
+  // FR-8 #76 AC5.6: include ended associations in this load — the Contact-
+  // detail page renders them with the ENDED visual canon (Delta 4 — dashed
+  // border + dimmed head + ENDED tag + Reactivate pill in foot). The lens /
+  // BrandContactsTable surfaces filter ended_at NULL at their query boundary.
   const [contactBrandsRes, contactPitchesRes] = await Promise.all([
     supabase
       .from('contact_brands')
-      .select('brand_id, role, brands(id, name)')
+      .select('brand_id, role, ended_at, ended_reason, brands(id, name)')
       .eq('contact_id', contactId),
     supabase
       .from('contact_pitches')
@@ -166,9 +225,16 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
   // most recent pitch within the last 90 days. "Concurrent client" pill
   // (middleman case): when a Contact has 2+ Brand-associations with
   // overlapping active windows (defined as a pitch in the last 90 days for
-  // each Brand). v1 ships the simple form; design canon's stress-test
-  // "connector case" lands fully at FR-8 (when the Connector pattern earns
-  // its own treatment per design canon §40 Marcus card).
+  // each Brand).
+  // FR-8 #76 AC5.6: ended associations are excluded from active heuristics
+  // (Current / Concurrent / Prior). They get their own ENDED tag (overrides
+  // all three) + Variant 1 visual treatment (dashed border + dimmed head +
+  // Reactivate pill). Build the ended-id set up-front so the recent/all maps
+  // skip those brand_ids entirely.
+  const endedBrandIds = new Set<string>()
+  for (const cb of contactBrands) {
+    if (cb.ended_at) endedBrandIds.add(cb.brand_id)
+  }
   const now = Date.now()
   const DAY_MS = 24 * 60 * 60 * 1000
   const recentByBrandId = new Map<string, number>() // brand_id -> count of pitches in last N days
@@ -179,8 +245,9 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
     bucket.push(p)
     allByBrandId.set(p.brand_id, bucket)
     if (
+      !endedBrandIds.has(p.brand_id) &&
       now - new Date(p.created_at).getTime() <
-      CURRENT_BRAND_WINDOW_DAYS * DAY_MS
+        CURRENT_BRAND_WINDOW_DAYS * DAY_MS
     ) {
       recentByBrandId.set(p.brand_id, (recentByBrandId.get(p.brand_id) ?? 0) + 1)
     }
@@ -253,10 +320,12 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
               ? `Tracked since ${formatFullDate(firstPitchAt)}`
               : 'New contact · no pitches yet'}
           </span>
-          <h1 className="person-h1">
-            {displayName}
-            <span className="dot">.</span>
-          </h1>
+          <PersonNameEditor
+            contactId={contactId}
+            initialDisplayName={displayName}
+            initialDisplayNameRaw={contact.display_name}
+            currentSlug={resolved.slug}
+          />
           <div className="person-meta">
             {primaryRole ? (
               <span>
@@ -285,21 +354,14 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
         </div>
       </section>
 
-      {contact.channels.length > 0 ? (
-        <section className="channels-strip">
-          <span className="channels-strip-h">Channels</span>
-          <div className="channels-strip-rows">
-            {contact.channels.map((ch, i) => (
-              <span key={i} className="channel-chip">
-                <span className={`ch-dot ${CHANNEL_KIND_CLASS[ch.kind]}`} />
-                {ch.identifier ? <span>{ch.identifier}</span> : null}
-                <span className="ch-label">{ch.kind}</span>
-                {ch.primary ? <span className="ch-primary">Primary</span> : null}
-              </span>
-            ))}
-          </div>
-        </section>
-      ) : null}
+      {/* FR-8 #77: ChannelsEditor handles both display + edit modes. Renders
+          the existing chip layout in display mode + the kind/identifier/Primary/
+          Remove + Add row editor in edit mode. Shows an Edit affordance even
+          when zero channels so the user can add the first one. */}
+      <ChannelsEditor
+        contactId={contactId}
+        initialChannels={contact.channels}
+      />
 
       <BrandStatsStrip
         pitchesCount={pitches.length}
@@ -353,24 +415,34 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
               const brand = cb.brands
               if (!brand) return null
               const brandPitches = allByBrandId.get(brand.id) ?? []
-              const isCurrent = brand.id === currentBrandId
+              const isEnded = cb.ended_at !== null
+              const isCurrent = !isEnded && brand.id === currentBrandId
               const recentCount = recentByBrandId.get(brand.id) ?? 0
-              const tag: { label: string; cls: string } | null = isCurrent
-                ? { label: 'Current', cls: '' }
-                : isConcurrentMultiBrand && recentCount > 0
-                  ? { label: 'Concurrent', cls: 'is-concurrent' }
-                  : recentCount === 0 && brandPitches.length > 0
-                    ? { label: 'Prior', cls: 'is-prior' }
-                    : null
+              // ENDED tag overrides Current/Concurrent/Prior per Delta 4.
+              const tag: { label: string; cls: string } | null = isEnded
+                ? {
+                    label: `ENDED · ${formatMonYear(cb.ended_at!)}`,
+                    cls: 'is-ended',
+                  }
+                : isCurrent
+                  ? { label: 'Current', cls: '' }
+                  : isConcurrentMultiBrand && recentCount > 0
+                    ? { label: 'Concurrent', cls: 'is-concurrent' }
+                    : recentCount === 0 && brandPitches.length > 0
+                      ? { label: 'Prior', cls: 'is-prior' }
+                      : null
               return (
                 <BrandCard
                   key={brand.id}
+                  contactId={contactId}
+                  contactName={displayName}
                   brandId={brand.id}
                   brandName={brand.name}
                   role={(cb.role as ContactRole | null) ?? null}
                   pitches={brandPitches}
                   dealByPitchId={dealByPitchId}
                   isCurrent={isCurrent}
+                  isEnded={isEnded}
                   tag={tag}
                 />
               )
@@ -378,37 +450,100 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
           </div>
         )}
       </section>
+
+      {/* FR-8 #78: Delete affordance in a quiet footer "Other actions" zone.
+          Voice-ladder discipline keeps it understated (text-link, not a big red
+          button). Server-side block-if-linked → DeleteBlockedModal w/ path-cards;
+          zero-history → quiet delete + nav back to /app/people.
+          FR-8 #78 smoke-fix 2026-05-31: pass active-brand-links so DeleteBlocked
+          "End a Brand link" path-card can mount UnlinkModal directly on the
+          single-active-brand fast-path (per spec D5). Multi-brand picker UI
+          pending Claude Design fold via open PL consult. */}
+      <ContactDeleteAction
+        contactId={contactId}
+        contactName={displayName}
+        activeBrandLinks={sortedBrandAssociations
+          .filter((cb) => !cb.ended_at && cb.brands)
+          .map((cb) => {
+            const brandPitches = allByBrandId.get(cb.brand_id) ?? []
+            let closedAmount = 0
+            let closedCurrency: string | null = null
+            let closedCount = 0
+            for (const p of brandPitches) {
+              const d = dealByPitchId.get(p.id)
+              if (d?.stage === 'delivered' && d.current_budget_amount) {
+                closedAmount += d.current_budget_amount
+                closedCurrency = closedCurrency ?? d.current_budget_currency ?? null
+                closedCount += 1
+              }
+            }
+            // Delta 7 picker tag derivation — maps the page's existing tag
+            // logic onto Claude Design's link-tag canon. At most one is-current
+            // per board by construction (single-current-brand heuristic).
+            const isCurrent = cb.brand_id === currentBrandId
+            const recentCount = recentByBrandId.get(cb.brand_id) ?? 0
+            const stateTag = isCurrent
+              ? ('is-current' as const)
+              : isConcurrentMultiBrand && recentCount > 0
+                ? ('is-concurrent' as const)
+                : recentCount === 0 && brandPitches.length > 0
+                  ? ('is-prior' as const)
+                  : null
+            return {
+              brand_id: cb.brand_id,
+              brand_name: cb.brands!.name,
+              pitch_count_for_pair: brandPitches.length,
+              closed_deal_count: closedCount,
+              closed_deal_amount_display:
+                closedAmount > 0 && closedCurrency
+                  ? formatCurrencyAmount(closedCurrency, closedAmount)
+                  : null,
+              role: (cb.role as ContactRole | null) ?? null,
+              last_pitch_at: brandPitches[0]?.created_at ?? null,
+              state_tag: stateTag,
+            }
+          })}
+      />
     </div>
     </>
   )
 }
 
 interface BrandCardProps {
+  contactId: string
+  contactName: string
   brandId: string
   brandName: string
   role: ContactRole | null
   pitches: Pitch[]
   dealByPitchId: Map<string, Deal>
   isCurrent: boolean
+  isEnded: boolean
   tag: { label: string; cls: string } | null
 }
 
 function BrandCard({
+  contactId,
+  contactName,
+  brandId,
   brandName,
   role,
   pitches,
   dealByPitchId,
   isCurrent,
+  isEnded,
   tag,
 }: BrandCardProps) {
   const lastPitchDate = pitches[0]?.created_at ?? null
   let closedAmount = 0
   let closedCurrency: string | null = null
+  let closedCount = 0
   for (const p of pitches) {
     const d = dealByPitchId.get(p.id)
     if (d?.stage === 'delivered' && d.current_budget_amount) {
       closedAmount += d.current_budget_amount
       closedCurrency = closedCurrency ?? d.current_budget_currency ?? null
+      closedCount += 1
     }
   }
   const closedDisplay =
@@ -416,8 +551,18 @@ function BrandCard({
       ? formatCurrencyAmount(closedCurrency, closedAmount)
       : null
 
+  // ENDED card variants per Delta 4: dashed border + dimmed head + ENDED tag
+  // (tag already computed by parent + passed in `tag`).
+  const cardClass = [
+    'brand-card',
+    isCurrent ? 'is-current' : '',
+    isEnded ? 'is-ended' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <article className={`brand-card ${isCurrent ? 'is-current' : ''}`}>
+    <article className={cardClass}>
       <header className="brand-card-h">
         <div className="brand-card-avatar">{initials(brandName)}</div>
         <div className="brand-card-id">
@@ -435,9 +580,24 @@ function BrandCard({
             ) : null}
           </Link>
           <span className="brand-card-sub">
-            {role ?? 'unspecified role'}
-            {lastPitchDate ? ` · last ${formatRelativeTime(lastPitchDate)}` : ''}
-            {` · ${pitches.length} ${pitches.length === 1 ? 'pitch' : 'pitches'}`}
+            <BrandAssocRoleControl
+              contactId={contactId}
+              brandId={brandId}
+              brandName={brandName}
+              contactName={contactName}
+              initialRole={role}
+              pitchCountForPair={pitches.length}
+              closedDealCount={closedCount}
+              closedDealAmountDisplay={closedDisplay}
+              variant="card-foot"
+            />
+            {/* Wrapped in a span so the ENDED-card dim (opacity 0.78) can target
+                just the text-trail without compounding through the role-popover
+                that also lives inside .brand-card-sub. Founder smoke 2026-06-01. */}
+            <span className="brand-card-sub-meta">
+              {lastPitchDate ? ` · last ${formatRelativeTime(lastPitchDate)}` : ''}
+              {` · ${pitches.length} ${pitches.length === 1 ? 'pitch' : 'pitches'}`}
+            </span>
           </span>
         </div>
         <div className="brand-card-meta">
@@ -515,8 +675,23 @@ function BrandCard({
           </>
         )}
       </div>
+      {isEnded ? (
+        <footer className="brand-card-foot">
+          <BrandAssocReactivate contactId={contactId} brandId={brandId} />
+        </footer>
+      ) : null}
     </article>
   )
+}
+
+const FULL_MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+] as const
+
+function formatMonYear(iso: string): string {
+  const d = new Date(iso)
+  return `${FULL_MONTHS[d.getMonth()].toUpperCase()} ${d.getFullYear()}`
 }
 
 function initials(name: string | null | undefined): string {

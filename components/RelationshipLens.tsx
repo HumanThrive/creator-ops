@@ -102,11 +102,14 @@ export function RelationshipLens({ pitch }: RelationshipLensProps) {
           : Promise.resolve({ data: [] as { id: string }[], error: null }),
         // Other contacts at Brand: contact_brands pivot rows under same Brand,
         // joined to contacts for display name on the first other contact.
+        // FR-8 #76 AC5.6: exclude ended associations from "other contacts"
+        // signal — ended relationships don't count toward active lens context.
         hasBrand
           ? supabase
               .from('contact_brands')
               .select('contact_id, contacts(display_name)')
               .eq('brand_id', pitch.brand_id!)
+              .is('ended_at', null)
           : Promise.resolve({
               data: [] as {
                 contact_id: string
@@ -127,11 +130,15 @@ export function RelationshipLens({ pitch }: RelationshipLensProps) {
           : Promise.resolve({ data: [] as { id: string; created_at: string }[], error: null }),
         // Brand chain: contact_brands pivot rows under this Contact, joined to
         // brands for display name; filter the current Brand out client-side.
+        // FR-8 #76 AC5.6: exclude ended associations from the active brand
+        // chain — ended brands stay visible on Contact-detail (Delta 4) but
+        // not in the lens's current-relationship-context summary.
         hasContact
           ? supabase
               .from('contact_brands')
               .select('brand_id, brands(name)')
               .eq('contact_id', pitch.contact_id!)
+              .is('ended_at', null)
           : Promise.resolve({
               data: [] as {
                 brand_id: string

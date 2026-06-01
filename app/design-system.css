@@ -112,6 +112,7 @@
   border-radius: 999px;
   cursor: pointer;
   transition: transform 0.15s, background 0.15s;
+  white-space: nowrap;
 }
 .btn-pill::before {
   content: ""; width: 7px; height: 7px;
@@ -1498,6 +1499,14 @@
   display: flex; align-items: flex-start; justify-content: center;
   overflow-y: auto;
   padding: 16px;
+  animation: pitch-modal-overlay-fade-in 180ms ease-out;
+}
+/* Mirrors `pdetail-fade-in` so AddPitch / NewContact / DeleteBlocked /
+   DeleteConfirm / Unlink / FR9-placeholder modals enter with the same
+   180ms scrim fade as PitchDetailModal. Founder smoke 5.1 2026-06-01. */
+@keyframes pitch-modal-overlay-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .pitch-modal {
   background: var(--paper);
@@ -6009,6 +6018,16 @@
   overflow: hidden;
 }
 .brand-card.is-current { border-color: var(--accent); }
+
+/* FR-8 #76 smoke-fix 2026-06-01: when a role-popover is open inside a
+   brand-card, flip overflow to visible so the popover can extend past the
+   card's head/body boundary. Without this, .brand-card { overflow: hidden }
+   (kept for rounded-corner discipline on the head's flat-top corners) clips
+   the popover at the card's lower edge. Mirrors the same pattern shipped
+   for .contacts-table-row.is-overflow-visible in the BrandContactsTable
+   mount. Default-state rounded-corner behavior is unchanged — overflow
+   only flips while the popover is open in the DOM. */
+.brand-card:has(.role-popover-menu) { overflow: visible; }
 .brand-card-h {
   display: grid;
   grid-template-columns: 36px 1fr auto;
@@ -6123,4 +6142,1073 @@
     gap: 10px;
   }
   .brand-card-body-h .h-stage, .brand-card-pitch-row .bcpr-stage { display: none; }
+}
+
+/* ============================================================================
+ * FR-8 S1 (slice #75): /app/people index additions
+ * ============================================================================ */
+
+/* "No role" state on .ctc-role (dashed slate; signals unspecified-role v1) */
+.ctc-role.is-empty {
+  color: var(--ink-4); border-color: var(--line); border-style: dashed;
+}
+
+/* Multi-role popover affordance on /app/people row (Delta 2) */
+.ctc-role-cell {
+  display: inline-flex; align-items: center; gap: 6px; align-self: center;
+}
+.ctc-role-more {
+  position: relative;
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.10em; color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 3px 7px; border-radius: 3px;
+  cursor: pointer; outline: none;
+  white-space: nowrap;
+}
+.ctc-role-pop {
+  display: none;
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 20;
+  min-width: 220px;
+  background: var(--paper); border: 1px solid var(--ink);
+  border-radius: 4px; padding: 10px 12px;
+  flex-direction: column; gap: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+  text-transform: none; letter-spacing: 0;
+}
+.ctc-role-more:hover .ctc-role-pop,
+.ctc-role-more:focus-within .ctc-role-pop { display: flex; }
+.ctc-role-pop-h {
+  font-family: var(--mono); font-size: 9.5px;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-4);
+  padding-bottom: 4px; border-bottom: 1px solid var(--line);
+}
+.ctc-role-pop-row {
+  font-family: var(--body); font-size: 12px; color: var(--ink-2);
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 4px 6px; border-radius: 3px;
+}
+.ctc-role-pop-row b { color: var(--ink); font-weight: 600; }
+.ctc-role-pop-role {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.06em; color: var(--ink-3);
+}
+.ctc-role-pop-row.is-current { background: var(--paper-2); }
+.ctc-role-pop-row.is-current .ctc-role-pop-role { color: var(--accent); }
+
+/* Section header (used on /app/people; reusable peer of .brand-section-h) */
+.section-h {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap; margin-top: 12px;
+}
+.section-h-l {
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.section-h-l::before {
+  content: ""; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent);
+}
+.section-h-l-meta {
+  font-family: var(--mono); font-size: 9.5px;
+  letter-spacing: 0.10em; color: var(--ink-4); font-style: italic;
+}
+.section-h-actions {
+  display: inline-flex; gap: 8px; align-items: center;
+  flex-wrap: wrap;
+}
+
+.section-action {
+  font-family: var(--body); font-size: 12.5px; font-weight: 500;
+  background: var(--paper); border: 1px solid var(--line-2); color: var(--ink-2);
+  padding: 6px 12px 6px 18px; border-radius: 999px; cursor: pointer;
+  position: relative; display: inline-flex; align-items: center; gap: 8px;
+  white-space: nowrap;
+}
+.section-action::before {
+  content: ""; position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+}
+.section-action:hover { border-color: var(--ink); color: var(--ink); }
+.section-action:disabled { opacity: 0.5; cursor: not-allowed; }
+.section-action:disabled:hover { border-color: var(--line-2); color: var(--ink-2); }
+
+.search-input {
+  font-family: var(--body); font-size: 13.5px;
+  background: var(--paper); border: 1px solid var(--line-2);
+  border-radius: 999px; padding: 7px 16px; width: 240px;
+  color: var(--ink);
+}
+.search-input::placeholder { color: var(--ink-4); }
+.search-input:focus { outline: none; border-color: var(--ink); }
+
+/* /app/people empty state (page-level when zero contacts; also in list when
+   search produces no matches) */
+.people-empty {
+  background: var(--paper-board);
+  border: 1px dashed var(--line-board);
+  border-radius: 5px;
+  padding: 48px 40px;
+  display: flex; flex-direction: column; gap: 16px; align-items: flex-start;
+  margin-top: 16px;
+}
+.people-empty-p {
+  font-family: var(--body); font-size: 14px;
+  color: var(--ink-3); max-width: 60ch; margin: 0;
+}
+
+/* Text variant on .stat-cell-v for non-numeric values (e.g., brand name in
+   PeopleStatsStrip cell [03]). Smaller display size; wraps gracefully. */
+.stat-cell-v.stat-cell-v-text {
+  font-family: var(--body); font-size: 22px; font-weight: 600;
+  line-height: 1.2; letter-spacing: -0.005em;
+  word-break: break-word;
+}
+
+/* Mobile: /app/people row collapses per Delta 2.
+   Per LD [[mobile overrides via @container app]] calibration — placed AFTER
+   the .contacts-table-row base rule (line 5726) so source order wins. */
+@container app (max-width: 720px) {
+  .contacts-table-h { display: none; }
+  .contacts-table-row {
+    grid-template-columns: 1fr auto auto;
+    gap: 8px 10px; padding: 12px 14px;
+    align-items: center;
+  }
+  /* Delta 2 explicitly: "Hide only .ctc-num" — keep role + last-touch visible. */
+  .contacts-table-row .ctc-num { display: none; }
+  /* v1-trim: channel-dots hidden on mobile; restore via Watchlist mobile polish. */
+  .contacts-table-row .ctc-channels { display: none; }
+  .contacts-table-row .ctc-name { grid-column: 1 / 2; grid-row: 1; }
+  .contacts-table-row .ctc-role-cell {
+    grid-column: 2 / 3; grid-row: 1; justify-self: end;
+  }
+  .contacts-table-row .ctc-arrow { grid-column: 3 / 4; grid-row: 1; }
+  .contacts-table-row .ctc-last {
+    grid-column: 1 / 4; grid-row: 2;
+    text-align: right; padding-top: 2px;
+  }
+
+  /* Section-head + tools wrap full-width on narrow screens */
+  .section-h { gap: 8px; }
+  .section-h-actions { width: 100%; gap: 8px; flex-wrap: wrap; }
+  .section-h-actions .search-input { width: 100%; flex: 1 0 100%; }
+  .section-h-actions .sort { flex: 1; }
+  .section-h-actions .section-action { flex: 0 0 auto; }
+
+  .people-empty { padding: 28px 20px; }
+  .stat-cell-v.stat-cell-v-text { font-size: 18px; }
+}
+
+/* ============================================================================
+ * FR-8 S5 (slice #76): Brand-assoc management — RolePopover + UnlinkModal +
+ *                       ENDED canon Variant 1 + Reactivate pill
+ * ============================================================================ */
+
+/* RolePopover — inline trigger + dropdown menu. Used on Contact-detail
+   stacked Brand card AND BrandContactsTable row. */
+.role-popover {
+  position: relative; display: inline-block;
+  vertical-align: middle;
+}
+.role-popover-menu {
+  position: absolute; left: 0; top: calc(100% + 6px);
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 5px;
+  box-shadow: 0 12px 28px -8px rgba(10, 14, 28, 0.30);
+  padding: 6px;
+  min-width: 200px;
+  display: flex; flex-direction: column; gap: 1px;
+  z-index: 50;
+  text-transform: none; letter-spacing: 0;
+}
+.role-popover-item {
+  background: transparent; border: none; cursor: pointer;
+  font-family: var(--body); font-size: 13px;
+  color: var(--ink-2);
+  padding: 8px 12px; text-align: left;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+}
+.role-popover-item:hover { background: var(--paper-2); color: var(--ink); }
+.role-popover-item.is-on { color: var(--ink); font-weight: 500; }
+.role-popover-item .check {
+  color: var(--accent); font-family: var(--mono); font-size: 11px;
+}
+.role-popover-item.is-danger {
+  color: var(--accent);
+  border-top: 1px dashed var(--line);
+  margin-top: 4px; padding-top: 10px;
+}
+
+/* Saved/Reverted/Error inline notice strip after auto-save. Renders next to
+   the trigger; absolute-positioned so it doesn't push surrounding layout.
+   `min-height` locks the pill size across all states (saving has text only;
+   saved has text + Undo pill which is taller — the lock prevents a height
+   jump on the saving→saved transition. Founder smoke 2026-06-01). */
+.role-popover-notice {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-3);
+  background: var(--paper);
+  border: 1px solid var(--line-2); border-radius: 999px;
+  padding: 4px 10px;
+  min-height: 30px;
+  box-sizing: border-box;
+  display: inline-flex; align-items: center; gap: 8px;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px -4px rgba(10, 14, 28, 0.15);
+  animation: role-popover-notice-fade 0.2s ease-out;
+}
+.role-popover-notice.is-error {
+  color: var(--accent); border-color: var(--accent);
+}
+.role-popover-notice.is-reverted { color: var(--ink); }
+.role-popover-notice.is-saving {
+  color: var(--ink-3);
+  animation: role-popover-notice-fade 0.2s ease-out,
+             role-popover-notice-pulse 1.2s ease-in-out infinite 0.2s;
+}
+.role-popover-notice-close {
+  background: transparent; border: none; cursor: pointer;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--accent);
+  padding: 0 4px; line-height: 1;
+  margin-left: 4px;
+}
+.role-popover-notice-close:hover { color: var(--ink); }
+@keyframes role-popover-notice-fade {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes role-popover-notice-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/* Exit animation (Founder smoke 2026-06-01) — reverse of the enter fade.
+   .is-leaving is appended by React when the 3s TTL fires OR when the user
+   clicks the error ✕ dismiss button. animation-fill: forwards holds the final
+   state until the React unmount completes ~200ms later. Placed AFTER all the
+   .is-{kind} rules so its `animation` declaration wins the cascade — would
+   otherwise be clobbered by .is-saving's two-animation declaration. */
+.role-popover-notice.is-leaving {
+  animation: role-popover-notice-fade-out 0.2s ease-in forwards !important;
+}
+@keyframes role-popover-notice-fade-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .role-popover-notice.is-saving { animation: role-popover-notice-fade 0.2s ease-out; }
+  .role-popover-notice.is-leaving { animation: none !important; opacity: 0; }
+}
+
+/* Inline-edit role-pill — trigger for the RolePopover. Mirrors .ctc-role
+   visual but with a caret hint + clickable surface. */
+.role-pill-edit {
+  background: var(--paper); border: 1px solid var(--line-2);
+  color: var(--ink-2); cursor: pointer;
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 4px 22px 4px 10px; border-radius: 3px;
+  position: relative;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.role-pill-edit::after {
+  content: ""; position: absolute; right: 9px; top: 50%;
+  width: 6px; height: 6px;
+  border-right: 1px solid var(--ink-4);
+  border-bottom: 1px solid var(--ink-4);
+  transform: translateY(-65%) rotate(45deg);
+}
+.role-pill-edit:hover { border-color: var(--ink); color: var(--ink); }
+.role-pill-edit.is-pr { color: var(--ink-2); }
+.role-pill-edit.is-brand-team { color: var(--ink); border-color: var(--ink-3); }
+.role-pill-edit.is-connector { color: var(--accent); border-color: var(--accent); }
+.role-pill-edit.is-founder {
+  color: var(--ink-2); border-color: var(--ink-3); border-style: dashed;
+}
+.role-pill-edit.is-other { color: var(--ink-4); border-color: var(--line); }
+.role-pill-edit.is-empty {
+  color: var(--ink-4); border-color: var(--line); border-style: dashed;
+}
+
+/* Compact action pill (Cancel / Undo / Reactivate / Remove in modal foot
+   + brand-card foot). */
+.row-action-pill {
+  background: transparent; border: 1px solid var(--line-2); color: var(--ink-3);
+  border-radius: 999px; padding: 4px 10px;
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px;
+  white-space: nowrap;
+}
+.row-action-pill:hover { border-color: var(--ink); color: var(--ink); }
+.row-action-pill:disabled { opacity: 0.5; cursor: not-allowed; }
+.row-action-pill:disabled:hover { border-color: var(--line-2); color: var(--ink-3); }
+.row-action-pill.is-warn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Warn variant of the canonical btn-pill (used as primary `End relationship`
+   button in UnlinkModal's soft branch). Reuses btn-pill base typography. */
+.btn-pill.is-warn {
+  background: var(--paper); color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.btn-pill.is-warn:hover { background: var(--accent); color: var(--paper); }
+
+/* contacts-table-row overflow:visible variant — needed when row contains a
+   popover that must escape the row's overflow boundary (Delta 4 explicit). */
+.contacts-table-row.is-overflow-visible { overflow: visible; }
+/* Lifting the whole table's overflow:hidden too, since the row sits inside
+   the table wrapper which has overflow:hidden by default (line 5714). */
+.contacts-table:has(.is-overflow-visible) { overflow: visible; }
+
+/* ─── ENDED canon Variant 1 on stacked Brand card (Delta 4) ─────────────
+   Dashed border + dimmed head opacity ~0.78 + ENDED · MON YYYY tag + foot
+   carries the Reactivate pill. Card stays in chain order (per spec). */
+.brand-card.is-ended {
+  border-color: var(--line-board);
+  border-style: dashed;
+}
+/* FR-8 #76 smoke-fix 2026-06-01: dim ENDED-card head via TARGETED children
+   (avatar / name / meta / sub-trail span), NOT the whole .brand-card-h.
+   Applying opacity to .brand-card-h created a stacking context that dragged
+   the role-popover (a .brand-card-sub descendant) into the same 0.78 alpha,
+   so the popover rendered translucent + the brand-card-meta showed through.
+   Targeted dimming keeps the popover at full opacity. .brand-card-body stays
+   wholesale-dimmed (no popover descendants). */
+.brand-card.is-ended .brand-card-avatar,
+.brand-card.is-ended .brand-card-name,
+.brand-card.is-ended .brand-card-meta,
+.brand-card.is-ended .brand-card-sub-meta { opacity: 0.78; }
+.brand-card.is-ended .brand-card-body { opacity: 0.88; }
+.brand-card-name-tag.is-ended {
+  color: var(--ink-3);
+  border-color: var(--ink-3);
+  border-style: dashed;
+  background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 3px; border-width: 1px;
+}
+.brand-card-foot {
+  padding: 10px 16px;
+  border-top: 1px dashed var(--line);
+  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+  background: var(--paper);
+}
+.brand-card-reactivate {
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.brand-card-reactivate-err {
+  font-family: var(--mono); font-size: 9.5px;
+  letter-spacing: 0.10em; color: var(--accent);
+}
+
+/* ─── UnlinkModal (uses pitch-modal-overlay backdrop; pitch-modal-close X) ─ */
+.modal-card {
+  background: var(--paper);
+  border: 1px solid var(--ink); border-radius: 6px;
+  width: 100%; max-width: 560px;
+  display: flex; flex-direction: column;
+  box-shadow: 0 16px 48px -8px rgba(10, 14, 28, 0.35);
+  margin: auto;
+  max-height: 88vh; overflow-y: auto;
+}
+.modal-band {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-board);
+}
+.modal-band-l {
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.modal-band-l::before {
+  content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+}
+.modal-body {
+  padding: 24px; display: flex; flex-direction: column; gap: 16px;
+}
+.modal-h {
+  font-family: var(--display); font-weight: 400;
+  font-size: clamp(28px, 4.5vw, 40px);
+  line-height: 0.95; letter-spacing: 0.005em;
+  text-transform: uppercase; color: var(--ink); margin: 0;
+}
+.modal-h .dot { color: var(--accent); }
+.modal-p {
+  font-family: var(--body); font-size: 14px; line-height: 1.55;
+  color: var(--ink-2); margin: 0;
+}
+.modal-p b { color: var(--ink); font-weight: 600; }
+.modal-p em { color: var(--ink); font-style: italic; }
+
+.modal-block {
+  border: 1px solid var(--line-2); border-radius: 4px;
+  padding: 14px 16px;
+  background: var(--paper-board);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.modal-block-h {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3);
+}
+.modal-block-list {
+  margin: 0; padding-left: 18px;
+  display: flex; flex-direction: column; gap: 6px;
+  font-family: var(--body); font-size: 13px; color: var(--ink-2);
+  line-height: 1.5;
+}
+.modal-block-list li em { color: var(--ink); font-style: italic; }
+
+.modal-field { display: flex; flex-direction: column; gap: 6px; }
+.modal-field-l {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+}
+.modal-field-opt {
+  color: var(--ink-4); font-style: italic; margin-left: 4px;
+}
+.modal-field-input {
+  font-family: var(--body); font-size: 13.5px;
+  background: var(--paper); color: var(--ink);
+  border: 1px solid var(--line-2); border-radius: 4px;
+  padding: 8px 12px; width: 100%;
+  resize: vertical; min-height: 64px;
+}
+.modal-field-input:focus { outline: none; border-color: var(--ink); }
+
+.modal-foot {
+  border-top: 1px solid var(--line);
+  padding: 14px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+  background: var(--paper);
+}
+.modal-foot-help {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+
+/* Footer canon for the "inside-.modal-body" variant — DeleteBlockedModal paths
+   body + picker body both carry .blocked-card-foot. .modal-body already owns
+   the x-padding, so the footer must NOT re-pad inward (would create a 2-step
+   indent vs the body content). Border-top is dashed per the Surface 4 design
+   reference (Founder smoke 2D.3 2026-06-01). */
+.blocked-card-foot {
+  padding: 6px 0 0;
+  border-top: 1px dashed var(--line);
+  background: transparent;
+}
+
+@container app (max-width: 720px) {
+  .modal-card { max-width: 100%; max-height: 92vh; }
+  .modal-body { padding: 18px; gap: 14px; }
+  .modal-h { font-size: clamp(24px, 7vw, 32px); }
+  .modal-foot { flex-wrap: wrap; }
+  .role-popover-menu { min-width: 180px; }
+}
+
+/* ============================================================================
+ * FR-8 S3 (slice #77): Contact detail edit (name + channels, ZERO-SHIFT)
+ * ============================================================================ */
+
+/* PersonNameEditor — wraps the H1 + dot + actions. ZERO-SHIFT: H1 dimensions
+   stay identical in display + edit modes; only the `is-edit` modifier adds an
+   underline accent. The dot stays adjacent in both modes (rendered outside the
+   contenteditable boundary so caret doesn't land on it). */
+.person-h1-wrap {
+  display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap;
+  position: relative;
+}
+.person-h1[contenteditable="true"],
+.person-h1.is-edit {
+  outline: none;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+  cursor: text;
+}
+.person-h1-dot { /* matches .person-h1 .dot rendering when present inside */
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  color: var(--accent);
+  display: inline;
+}
+.person-h1-actions {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-left: 12px; align-self: center;
+}
+.person-h1-err {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.10em; color: var(--accent);
+}
+
+/* Compact pill buttons used in inline editors (PersonNameEditor + ChannelsEditor
+   section-head action). */
+.btn-pill-mini {
+  background: var(--ink); color: var(--paper); border: 1px solid var(--ink);
+  border-radius: 999px; cursor: pointer;
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 5px 12px;
+  display: inline-flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+}
+.btn-pill-mini:hover { background: var(--accent); border-color: var(--accent); }
+.btn-pill-mini:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-pill-mini:disabled:hover { background: var(--ink); border-color: var(--ink); }
+
+.btn-ghost-mini {
+  background: transparent; color: var(--ink-3); border: 1px solid var(--line-2);
+  border-radius: 999px; cursor: pointer;
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 5px 12px;
+  display: inline-flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+}
+.btn-ghost-mini:hover { border-color: var(--ink); color: var(--ink); }
+.btn-ghost-mini:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-ghost-mini:disabled:hover { border-color: var(--line-2); color: var(--ink-3); }
+
+/* ChannelsEditor — display-mode head wrapper + edit-mode rows + add ghost row */
+.channels-strip.is-edit {
+  padding-bottom: 8px;
+}
+.channels-strip-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.channels-strip-h-sub {
+  margin-left: 8px;
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.10em; color: var(--ink-4);
+}
+.channels-strip-h-sub.is-accent { color: var(--accent); }
+.channels-strip-h-sub.is-error { color: var(--accent); }
+.channels-strip-empty {
+  padding: 14px 0;
+  font-family: var(--body); font-size: 13px; color: var(--ink-4);
+  font-style: italic;
+}
+
+.ch-edit-rows {
+  display: flex; flex-direction: column; gap: 6px;
+  container-type: inline-size;
+  container-name: chrows;
+}
+.ch-edit-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 8px; align-items: center;
+}
+.ch-edit-picker-wrap {
+  position: relative; display: inline-block;
+}
+.ch-edit-picker-wrap::before {
+  content: ""; position: absolute; left: 10px; top: 50%;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--ink-4); transform: translateY(-50%);
+  z-index: 1; pointer-events: none;
+}
+.ch-edit-picker-wrap.ch-email::before { background: var(--ch-email); }
+.ch-edit-picker-wrap.ch-ig::before { background: var(--ch-ig); }
+.ch-edit-picker-wrap.ch-tt::before { background: var(--ch-tt); }
+.ch-edit-picker-wrap.ch-wa::before { background: var(--ch-wa); }
+.ch-edit-picker-wrap.ch-x::before { background: var(--ch-x); }
+.ch-edit-picker-wrap.ch-irl::before { background: var(--ch-irl); }
+.ch-edit-picker-wrap.ch-facebook::before { background: var(--ch-facebook); }
+.ch-edit-picker-wrap.ch-linkedin::before { background: var(--ch-linkedin); }
+.ch-edit-picker-wrap.ch-website::before { background: var(--ch-website); }
+.ch-edit-picker {
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink);
+  background: var(--paper); border: 1px solid var(--line-2);
+  border-radius: 4px;
+  padding: 7px 26px 7px 24px;
+  appearance: none; -webkit-appearance: none;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%),
+                    linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position: calc(100% - 12px) 50%, calc(100% - 7px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.ch-edit-picker:focus { outline: none; border-color: var(--ink); }
+.ch-edit-input {
+  font-family: var(--body); font-size: 14px;
+  background: var(--paper); color: var(--ink);
+  border: 1px solid var(--line-2); border-radius: 4px;
+  padding: 7px 10px;
+  width: 100%; min-width: 0;  /* min-width:0 lets flex/grid input shrink past intrinsic */
+}
+.ch-edit-input:focus { outline: none; border-color: var(--ink); }
+.ch-edit-input.is-error { border-color: var(--accent); }
+.ch-edit-primary {
+  background: transparent; border: 1px solid var(--line-2); color: var(--ink-3);
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 5px 10px; border-radius: 999px; cursor: pointer;
+  white-space: nowrap;
+}
+.ch-edit-primary:hover { border-color: var(--ink); color: var(--ink); }
+.ch-edit-primary.is-on {
+  background: var(--ink); color: var(--paper); border-color: var(--ink);
+}
+.ch-edit-primary.is-on:hover { background: var(--accent); border-color: var(--accent); }
+.ch-edit-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.ch-edit-primary:disabled:hover { border-color: var(--line-2); color: var(--ink-3); }
+.ch-edit-remove {
+  background: transparent; border: 1px solid var(--line); color: var(--ink-4);
+  width: 28px; height: 28px; border-radius: 999px; cursor: pointer;
+  font-family: var(--mono); font-size: 11px;
+  display: flex; align-items: center; justify-content: center;
+}
+.ch-edit-remove:hover { border-color: var(--accent); color: var(--accent); }
+.ch-edit-remove:disabled { opacity: 0.4; cursor: not-allowed; }
+.ch-edit-remove:disabled:hover { border-color: var(--line); color: var(--ink-4); }
+
+.ch-edit-add {
+  width: 100%;
+  background: transparent;
+  border: 1px dashed var(--line-2); color: var(--ink-3);
+  border-radius: 4px; padding: 8px 12px;
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  cursor: pointer;
+  margin-top: 2px;
+}
+.ch-edit-add:hover { border-color: var(--ink); color: var(--ink); }
+.ch-edit-add:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Local container query for narrow row restack (per spec Delta 3 — NOT the
+   frame-wide @container app; so side-by-side desktop frames at ~550px stay
+   single-row). Triggers below 400px on the .ch-edit-rows container. */
+@container chrows (max-width: 400px) {
+  .ch-edit-row {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "picker input remove"
+      ". primary primary";
+    gap: 6px 8px;
+  }
+  .ch-edit-picker-wrap { grid-area: picker; }
+  .ch-edit-input { grid-area: input; }
+  .ch-edit-remove { grid-area: remove; }
+  .ch-edit-primary { grid-area: primary; justify-self: start; margin-left: -2px; }
+}
+
+@container app (max-width: 720px) {
+  .person-h1-wrap { flex-wrap: wrap; }
+  .person-h1-actions { margin-left: 0; margin-top: 6px; }
+  .channels-strip-head { flex-wrap: wrap; gap: 8px; }
+}
+
+/* ============================================================================
+ * FR-8 S4 (slice #78): Delete + voice-ladder destructive copy
+ * ============================================================================ */
+
+/* Path-cards on DeleteBlockedModal — two equal-weight buttons-as-cards. */
+.path-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 6px;
+}
+/* Single-card layout (Case A in DeleteBlockedModal — End-a-link card
+   suppressed because all brand-links are ended; Combine is the sole path).
+   Default 2-col grid would render the single card at half-width with empty
+   space; force full-width here. Founder smoke 2D Case A 2026-06-01 +
+   PL lock. */
+.path-cards.is-single {
+  grid-template-columns: 1fr;
+}
+.path-card {
+  background: var(--paper); border: 1px solid var(--line-2);
+  border-radius: 6px; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+  text-align: left; cursor: pointer;
+  color: var(--ink-2);
+  position: relative;
+  transition: border-color 0.15s ease-out, transform 0.05s ease-out;
+}
+.path-card:hover {
+  border-color: var(--ink); transform: translateY(-1px);
+}
+.path-card.is-recommended {
+  border-color: var(--accent); background: color-mix(in oklab, var(--accent) 6%, var(--paper));
+}
+.path-card.is-recommended:hover {
+  border-color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 10%, var(--paper));
+}
+.path-card-tag {
+  position: absolute; top: 8px; right: 10px;
+  font-family: var(--mono); font-size: 9px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 999px;
+  padding: 2px 7px;
+}
+.path-card-h {
+  font-family: var(--body); font-size: 15px; font-weight: 600;
+  color: var(--ink);
+}
+.path-card-p {
+  font-family: var(--body); font-size: 13px; line-height: 1.5;
+  color: var(--ink-3);
+}
+.path-card-cta {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink);
+  margin-top: 4px;
+}
+
+/* DupEmailCallout — inline accent-bordered card under the offending input. */
+.dup-email-callout {
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--accent) 4%, var(--paper));
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+  margin-bottom: 10px;
+}
+.dup-email-callout-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px;
+}
+.dup-email-callout-kicker {
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent);
+}
+.dup-email-callout-close {
+  background: transparent; border: none; cursor: pointer;
+  font-family: var(--mono); font-size: 12px; color: var(--ink-4);
+  padding: 0; line-height: 1;
+}
+.dup-email-callout-close:hover { color: var(--ink); }
+.dup-email-callout-p {
+  font-family: var(--body); font-size: 13.5px; line-height: 1.5;
+  color: var(--ink-2); margin: 0;
+}
+.dup-email-callout-p b { color: var(--ink); font-weight: 600; }
+.dup-email-callout-actions {
+  display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+.dup-email-callout-sub {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent);
+  margin-top: 2px;
+}
+
+/* Contact-detail "Other actions" footer — quiet delete affordance.
+   Voice-ladder discipline: text-link, not a destructive-red button. */
+.contact-danger-zone {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--line);
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+}
+.contact-danger-zone-l {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-4);
+}
+/* ZERO-SHIFT slot — locks vertical box so the row doesn't collapse when the
+   13px-body button unmounts and a 10px-mono status/error span renders in its
+   place. 26px ≈ 13px body line-height ~1.4 + 4px×2 button padding. Founder
+   smoke 2026-06-01 2D.1. */
+.contact-delete-slot {
+  display: inline-flex; align-items: center;
+  min-height: 26px;
+  box-sizing: border-box;
+}
+.contact-delete-link {
+  background: transparent; border: none; cursor: pointer;
+  font-family: var(--body); font-size: 13px; color: var(--ink-3);
+  padding: 4px 6px;
+  text-decoration: underline; text-decoration-color: var(--line-2);
+  text-underline-offset: 4px;
+}
+.contact-delete-link:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+/* Matches .contact-delete-link's body/13px box so the swap reads as a state
+   change (text + color), not a font shrink. Founder smoke 2D.1 2026-06-01. */
+.contact-delete-status {
+  font-family: var(--body); font-size: 13px; color: var(--ink-4);
+  padding: 4px 6px;
+}
+.contact-danger-zone-err {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.10em; color: var(--accent);
+  display: inline-flex; align-items: center;
+}
+
+@container app (max-width: 720px) {
+  .path-cards { grid-template-columns: 1fr; }
+}
+
+/* ============================================================================
+ * FR-8 S2 (slice #79): NewContactModal — minor additions
+ * ============================================================================ */
+
+.ch-edit-empty {
+  font-family: var(--body); font-size: 13px; color: var(--ink-4);
+  font-style: italic;
+  padding: 10px 0;
+}
+.new-contact-modal { max-width: 540px; }
+
+/* ============================================================================
+ * FR-8 Delta 7 (post-ship 2026-05-31 19:49): Surface 4b — multi-brand picker
+ *   - DeleteBlockedModal body-swap animation (Variant A in-place)
+ *   - Picker layout primitives (lifted from Claude Design stress-test)
+ *   - Scoped modal width override (640px on DeleteBlockedModal only)
+ * Reference: docs/design/design_handoff_fr8_brand_link_picker/
+ * ============================================================================ */
+
+/* Scoped width override per LD pick — keep other .modal-card surfaces at 560px;
+   the picker rows + brand-link copy breathe at 640px. */
+.delete-blocked-modal { max-width: 640px; }
+
+/* Variant A body-swap animation tokens — calm/operational; sub-450ms total.
+   Scoped at :root so only the DeleteBlockedModal swap can read them; not used
+   anywhere else in the system. */
+:root {
+  --s4b-out: 130ms;       /* outgoing body fades + lifts */
+  --s4b-height: 280ms;    /* modal-body wrapper height morphs start → target */
+  --s4b-in: 200ms;        /* incoming body fades + settles */
+  --s4b-row-step: 45ms;   /* per-row stagger on the picker entrance */
+  --s4b-ease: cubic-bezier(0.22, 0.61, 0.36, 1);  /* one ease-out across phases */
+}
+
+/* Height-morphing wrapper around the modal body. The picker is a body state
+   of DeleteBlockedModal — same modal shell; only the inner swaps. */
+.delete-blocked-modal .swap {
+  overflow: hidden;
+  transition: height var(--s4b-height) var(--s4b-ease);
+}
+.delete-blocked-modal .swap-inner {
+  transition: opacity var(--s4b-out) var(--s4b-ease),
+              transform var(--s4b-out) var(--s4b-ease);
+}
+.delete-blocked-modal .swap-inner.is-leaving {
+  opacity: 0; transform: translateY(-8px);
+}
+.delete-blocked-modal .swap-inner.enter {
+  transition: opacity var(--s4b-in) var(--s4b-ease),
+              transform var(--s4b-in) var(--s4b-ease);
+}
+.delete-blocked-modal .swap-inner.enter.enter-start {
+  opacity: 0; transform: translateY(10px);
+}
+
+/* Row stagger on picker entrance — class stripped by React once settled
+   (in DeleteBlockedModal `isEntering` flag turns off at phase='idle'). */
+.delete-blocked-modal .link-rows.is-entering .link-row {
+  animation: s4bRowIn var(--s4b-in) var(--s4b-ease) both;
+}
+.delete-blocked-modal .link-rows.is-entering .link-row:nth-child(1) {
+  animation-delay: 55ms;
+}
+.delete-blocked-modal .link-rows.is-entering .link-row:nth-child(2) {
+  animation-delay: calc(55ms + var(--s4b-row-step));
+}
+.delete-blocked-modal .link-rows.is-entering .link-row:nth-child(3) {
+  animation-delay: calc(55ms + 2 * var(--s4b-row-step));
+}
+.delete-blocked-modal .link-rows.is-entering .link-row:nth-child(4) {
+  animation-delay: calc(55ms + 3 * var(--s4b-row-step));
+}
+.delete-blocked-modal .link-rows.is-entering .link-row:nth-child(5) {
+  animation-delay: calc(55ms + 4 * var(--s4b-row-step));
+}
+.delete-blocked-modal .link-rows.is-entering .link-row:nth-child(6) {
+  animation-delay: calc(55ms + 5 * var(--s4b-row-step));
+}
+@keyframes s4bRowIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Picker layout ───────────────────────────────────────────────────── */
+
+.picker-body {
+  /* re-uses .modal-body padding/gap; just keeps the gap a touch tighter so
+     the picker-hint + foot row don't drift below the visual centre */
+  gap: 14px;
+}
+.picker-head { display: flex; flex-direction: column; gap: 12px; }
+.picker-kicker {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.picker-kicker::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+}
+.picker-h {
+  font-family: var(--display); font-weight: 400;
+  font-size: clamp(28px, 4.5vw, 40px);
+  line-height: 0.95; letter-spacing: 0.005em;
+  text-transform: uppercase; color: var(--ink); margin: 0;
+  outline: none;
+}
+.picker-h .dot { color: var(--accent); }
+.picker-sub {
+  font-family: var(--body); font-size: 14px; line-height: 1.55;
+  color: var(--ink-3); max-width: 58ch; margin: 0;
+}
+.picker-sub b { color: var(--ink-2); font-weight: 600; }
+
+.link-rows { display: flex; flex-direction: column; gap: 8px; }
+.link-rows.is-scroll {
+  max-height: 280px;
+  overflow-y: auto;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+}
+.link-rows.is-scroll::-webkit-scrollbar { width: 5px; }
+.link-rows.is-scroll::-webkit-scrollbar-thumb {
+  background: var(--line-2); border-radius: 999px;
+}
+
+.link-row {
+  display: grid;
+  grid-template-columns: 38px 1fr auto;
+  gap: 14px; align-items: center;
+  padding: 13px 16px;
+  background: var(--paper);
+  border: 1px solid var(--line-2);
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--body);
+  transition: border-color 0.12s var(--s4b-ease),
+              transform 0.12s var(--s4b-ease);
+}
+.link-row:hover,
+.link-row:focus-visible {
+  border-color: var(--ink);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.link-row-avatar {
+  width: 38px; height: 38px;
+  border-radius: 4px;
+  background: var(--ink); color: var(--paper);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--display); font-size: 17px; line-height: 1;
+}
+.link-row.is-home .link-row-avatar { background: var(--accent); }
+
+.link-row-id {
+  display: flex; flex-direction: column; gap: 5px; min-width: 0;
+}
+.link-row-name-line {
+  display: inline-flex; align-items: center; gap: 10px;
+  flex-wrap: wrap;
+}
+.link-row-name {
+  font-family: var(--display); font-weight: 400; font-size: 21px;
+  line-height: 1; letter-spacing: 0.005em;
+  text-transform: uppercase; color: var(--ink);
+}
+
+.link-tag {
+  font-family: var(--mono); font-size: 8.5px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 3px;
+  border: 1px solid var(--line);
+  color: var(--ink-4);
+  white-space: nowrap;
+}
+.link-tag.is-current { color: var(--accent); border-color: var(--accent); }
+.link-tag.is-home {
+  color: var(--accent); border-color: var(--accent); border-style: dashed;
+}
+.link-tag.is-concurrent { color: var(--ink); border-color: var(--ink-3); }
+.link-tag.is-prior { color: var(--ink-4); border-color: var(--line); }
+
+.link-row-sub {
+  display: inline-flex; align-items: center; gap: 9px;
+  flex-wrap: wrap;
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.06em; color: var(--ink-4);
+}
+.link-row-sub .sep { color: var(--line-2); }
+.link-row-sub b { color: var(--ink-3); font-weight: 500; }
+
+.link-role {
+  font-family: var(--mono); font-size: 9px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-2);
+  border: 1px solid var(--line-2);
+  padding: 2px 8px; border-radius: 3px;
+}
+
+.link-row-cta {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-4);
+  white-space: nowrap;
+  transition: color 0.12s var(--s4b-ease);
+}
+.link-row:hover .link-row-cta,
+.link-row:focus-visible .link-row-cta {
+  color: var(--accent);
+}
+
+.picker-hint {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.10em; color: var(--ink-4);
+  font-style: italic;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.picker-hint::before {
+  content: "↺"; font-style: normal; color: var(--ink-3); font-size: 12px;
+}
+
+.picker-scroll-count {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-4);
+  display: block; margin-top: -2px;
+}
+
+.picker-foot { padding-top: 14px; }
+.picker-back {
+  background: transparent; border: none; cursor: pointer;
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-3); padding: 4px 0;
+}
+.picker-back:hover { color: var(--ink); }
+
+/* Reduced motion — instant swap, no animation, no stagger.
+   Picker still works; it just doesn't move. */
+@media (prefers-reduced-motion: reduce) {
+  .delete-blocked-modal .swap,
+  .delete-blocked-modal .swap-inner,
+  .delete-blocked-modal .link-rows.is-entering .link-row {
+    transition: none !important;
+    animation: none !important;
+  }
 }
