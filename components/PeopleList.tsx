@@ -17,7 +17,7 @@ import { NewContactTrigger } from '@/components/NewContactTrigger'
 // client component owns the input affordances and routes via router.replace
 // to re-trigger the server render with new ?q= / ?sort= URL params.
 
-type SortMode = 'recent' | 'alpha'
+type SortMode = 'recent' | 'alpha' | 'alpha-desc'
 
 interface PeopleListProps {
   contacts: ContactSummary[]
@@ -53,8 +53,8 @@ export function PeopleList({ contacts, totalCount, query, sort }: PeopleListProp
   function setSort(next: SortMode) {
     if (next === sort) return
     const params = new URLSearchParams(searchParams.toString())
-    if (next === 'alpha') {
-      params.set('sort', 'alpha')
+    if (next === 'alpha' || next === 'alpha-desc') {
+      params.set('sort', next)
     } else {
       params.delete('sort')
     }
@@ -63,7 +63,8 @@ export function PeopleList({ contacts, totalCount, query, sort }: PeopleListProp
   }
 
   const noMatches = totalCount > 0 && contacts.length === 0
-  const sortLabel = sort === 'alpha' ? 'A → Z' : 'recent'
+  const sortLabel =
+    sort === 'alpha' ? 'A → Z' : sort === 'alpha-desc' ? 'Z → A' : 'recent'
   const headMeta = query
     ? `${contacts.length} of ${totalCount} · ${sortLabel}`
     : `${totalCount} · ${sortLabel}`
@@ -98,6 +99,13 @@ export function PeopleList({ contacts, totalCount, query, sort }: PeopleListProp
               onClick={() => setSort('alpha')}
             >
               A → Z
+            </button>
+            <button
+              type="button"
+              className={`sort-btn ${sort === 'alpha-desc' ? 'active' : ''}`}
+              onClick={() => setSort('alpha-desc')}
+            >
+              Z → A
             </button>
           </div>
           <NewContactTrigger />

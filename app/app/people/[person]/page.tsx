@@ -454,10 +454,55 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
       {/* FR-8 #78: Delete affordance in a quiet footer "Other actions" zone.
           Voice-ladder discipline keeps it understated (text-link, not a big red
           button). Server-side block-if-linked → DeleteBlockedModal w/ path-cards;
-          zero-history → quiet delete + nav back to /app/people. */}
+          zero-history → quiet delete + nav back to /app/people.
+          FR-8 #78 smoke-fix 2026-05-31: pass active-brand-links so DeleteBlocked
+          "End a Brand link" path-card can mount UnlinkModal directly on the
+          single-active-brand fast-path (per spec D5). Multi-brand picker UI
+          pending Claude Design fold via open PL consult. */}
       <ContactDeleteAction
         contactId={contactId}
         contactName={displayName}
+        activeBrandLinks={sortedBrandAssociations
+          .filter((cb) => !cb.ended_at && cb.brands)
+          .map((cb) => {
+            const brandPitches = allByBrandId.get(cb.brand_id) ?? []
+            let closedAmount = 0
+            let closedCurrency: string | null = null
+            let closedCount = 0
+            for (const p of brandPitches) {
+              const d = dealByPitchId.get(p.id)
+              if (d?.stage === 'delivered' && d.current_budget_amount) {
+                closedAmount += d.current_budget_amount
+                closedCurrency = closedCurrency ?? d.current_budget_currency ?? null
+                closedCount += 1
+              }
+            }
+            // Delta 7 picker tag derivation — maps the page's existing tag
+            // logic onto Claude Design's link-tag canon. At most one is-current
+            // per board by construction (single-current-brand heuristic).
+            const isCurrent = cb.brand_id === currentBrandId
+            const recentCount = recentByBrandId.get(cb.brand_id) ?? 0
+            const stateTag = isCurrent
+              ? ('is-current' as const)
+              : isConcurrentMultiBrand && recentCount > 0
+                ? ('is-concurrent' as const)
+                : recentCount === 0 && brandPitches.length > 0
+                  ? ('is-prior' as const)
+                  : null
+            return {
+              brand_id: cb.brand_id,
+              brand_name: cb.brands!.name,
+              pitch_count_for_pair: brandPitches.length,
+              closed_deal_count: closedCount,
+              closed_deal_amount_display:
+                closedAmount > 0 && closedCurrency
+                  ? formatCurrencyAmount(closedCurrency, closedAmount)
+                  : null,
+              role: (cb.role as ContactRole | null) ?? null,
+              last_pitch_at: brandPitches[0]?.created_at ?? null,
+              state_tag: stateTag,
+            }
+          })}
       />
     </div>
     </>
@@ -546,8 +591,13 @@ function BrandCard({
               closedDealAmountDisplay={closedDisplay}
               variant="card-foot"
             />
-            {lastPitchDate ? ` · last ${formatRelativeTime(lastPitchDate)}` : ''}
-            {` · ${pitches.length} ${pitches.length === 1 ? 'pitch' : 'pitches'}`}
+            {/* Wrapped in a span so the ENDED-card dim (opacity 0.78) can target
+                just the text-trail without compounding through the role-popover
+                that also lives inside .brand-card-sub. Founder smoke 2026-06-01. */}
+            <span className="brand-card-sub-meta">
+              {lastPitchDate ? ` · last ${formatRelativeTime(lastPitchDate)}` : ''}
+              {` · ${pitches.length} ${pitches.length === 1 ? 'pitch' : 'pitches'}`}
+            </span>
           </span>
         </div>
         <div className="brand-card-meta">

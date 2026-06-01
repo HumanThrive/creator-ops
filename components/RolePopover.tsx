@@ -27,13 +27,18 @@ interface RolePopoverProps {
 }
 
 type Notice =
+  | { kind: 'saving'; targetRole: ContactRole | null }
   | { kind: 'saved'; prevRole: ContactRole | null; nextRole: ContactRole | null }
   | { kind: 'reverted' }
   | { kind: 'error'; message: string }
   | null
 
-const NOTICE_TTL_MS = 5000
-const ERROR_TTL_MS = 4000
+// Unified TTL for saved/reverted/error (Founder smoke 2026-06-01: was 5s/4s, → 3s).
+// 'saving' has NO TTL — it stays until the in-flight fetch resolves to saved/error.
+const NOTICE_TTL_MS = 3000
+// Exit animation duration — must match @keyframes role-popover-notice-fade-out in
+// design-system.css. Drives the unmount delay after .is-leaving is applied.
+const EXIT_ANIM_MS = 200
 
 export function RolePopover({
   contactId,
@@ -46,7 +51,18 @@ export function RolePopover({
   const [role, setRole] = useState<ContactRole | null>(initialRole)
   const [open, setOpen] = useState(false)
   const [notice, setNotice] = useState<Notice>(null)
+  const [isLeaving, setIsLeaving] = useState(false)
   const wrapRef = useRef<HTMLSpanElement | null>(null)
+
+  // Centralized notice setter: resets the leaving phase so a new notice
+  // arriving mid-leave cancels the exit animation and replaces the content.
+  function showNotice(next: Notice) {
+    setIsLeaving(false)
+    setNotice(next)
+  }
+  function dismissNotice() {
+    setIsLeaving(true)
+  }
 
   // Outside-click + Escape close
   useEffect(() => {
@@ -67,13 +83,25 @@ export function RolePopover({
     }
   }, [open])
 
-  // Notice auto-dismiss
+  // 3s wait → flip to leaving phase. Skip 'saving' (it manages itself via fetch
+  // resolution; the 3s countdown only starts AFTER the save resolves). Skip if
+  // already leaving (a new notice arriving via showNotice resets isLeaving).
   useEffect(() => {
-    if (!notice) return
-    const ttl = notice.kind === 'error' ? ERROR_TTL_MS : NOTICE_TTL_MS
-    const t = setTimeout(() => setNotice(null), ttl)
+    if (!notice || notice.kind === 'saving' || isLeaving) return
+    const t = setTimeout(() => setIsLeaving(true), NOTICE_TTL_MS)
     return () => clearTimeout(t)
-  }, [notice])
+  }, [notice, isLeaving])
+
+  // Leaving phase → after the exit animation completes, unmount the notice.
+  // Matches @keyframes role-popover-notice-fade-out duration in design-system.css.
+  useEffect(() => {
+    if (!isLeaving) return
+    const t = setTimeout(() => {
+      setNotice(null)
+      setIsLeaving(false)
+    }, EXIT_ANIM_MS)
+    return () => clearTimeout(t)
+  }, [isLeaving])
 
   async function persistRole(next: ContactRole | null, prev: ContactRole | null) {
     const res = await fetch('/api/contact-brands/set-role', {
@@ -91,15 +119,18 @@ export function RolePopover({
     setOpen(false)
     if (next === role) return
     const prev = role
+    // Optimistic UI update + immediate 'saving' notice (no countdown during this).
     setRole(next)
     onRoleChange?.(next)
+    showNotice({ kind: 'saving', targetRole: next })
     try {
       await persistRole(next, prev)
-      setNotice({ kind: 'saved', prevRole: prev, nextRole: next })
+      showNotice({ kind: 'saved', prevRole: prev, nextRole: next })
     } catch (err) {
+      // Failure: revert role + flip notice to error (3s auto-dismiss + click-dismiss).
       setRole(prev)
       onRoleChange?.(prev)
-      setNotice({ kind: 'error', message: (err as Error).message })
+      showNotice({ kind: 'error', message: (err as Error).message })
     }
   }
 
@@ -107,17 +138,18 @@ export function RolePopover({
     if (!notice || notice.kind !== 'saved') return
     const { prevRole, nextRole } = notice
     const target = prevRole
+    // Optimistic revert + 'saving' notice for the undo round-trip too.
     setRole(target)
     onRoleChange?.(target)
-    setNotice(null)
+    showNotice({ kind: 'saving', targetRole: target })
     try {
       await persistRole(target, nextRole)
-      setNotice({ kind: 'reverted' })
+      showNotice({ kind: 'reverted' })
     } catch (err) {
       // Revert failed — restore the saved state so DB and UI agree.
       setRole(nextRole)
       onRoleChange?.(nextRole)
-      setNotice({ kind: 'error', message: (err as Error).message })
+      showNotice({ kind: 'error', message: (err as Error).message })
     }
   }
 
@@ -134,19 +166,29 @@ export function RolePopover({
 
   const stopRowPropagation = variant === 'table-row'
 
+  // In `table-row` variant the popover lives inside a Next.js <Link> row.
+  // stopPropagation alone isn't enough — it prevents React's Link onClick
+  // from firing but the browser's native anchor-activation still navigates.
+  // preventDefault stops the browser-level default; stopPropagation stops
+  // React-level bubble. Need both. Founder smoke 3.2 2026-06-01.
+  function guardClick(e: React.MouseEvent) {
+    if (stopRowPropagation) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+  }
+
   return (
     <span
       ref={wrapRef}
       className="role-popover"
-      onClick={(e) => {
-        if (stopRowPropagation) e.stopPropagation()
-      }}
+      onClick={guardClick}
     >
       <button
         type="button"
         className={triggerClass}
         onClick={(e) => {
-          if (stopRowPropagation) e.stopPropagation()
+          guardClick(e)
           setOpen((v) => !v)
         }}
         aria-expanded={open}
@@ -165,7 +207,7 @@ export function RolePopover({
               aria-checked={role === r}
               className={`role-popover-item ${role === r ? 'is-on' : ''}`}
               onClick={(e) => {
-                if (stopRowPropagation) e.stopPropagation()
+                guardClick(e)
                 handlePick(r)
               }}
             >
@@ -178,7 +220,7 @@ export function RolePopover({
             aria-checked={role === null}
             className={`role-popover-item ${role === null ? 'is-on' : ''}`}
             onClick={(e) => {
-              if (stopRowPropagation) e.stopPropagation()
+              guardClick(e)
               handlePick(null)
             }}
           >
@@ -189,7 +231,7 @@ export function RolePopover({
             role="menuitem"
             className="role-popover-item is-danger"
             onClick={(e) => {
-              if (stopRowPropagation) e.stopPropagation()
+              guardClick(e)
               handleUnlinkItemClick()
             }}
           >
@@ -199,15 +241,21 @@ export function RolePopover({
       ) : null}
 
       {notice ? (
-        <span className={`role-popover-notice is-${notice.kind}`} role="status">
-          {notice.kind === 'saved' ? (
+        <span
+          className={`role-popover-notice is-${notice.kind} ${isLeaving ? 'is-leaving' : ''}`}
+          role="status"
+          aria-live="polite"
+        >
+          {notice.kind === 'saving' ? (
+            <>Saving · {notice.targetRole ?? 'No role'}…</>
+          ) : notice.kind === 'saved' ? (
             <>
               Saved · {notice.nextRole ?? 'No role'}{' '}
               <button
                 type="button"
                 className="row-action-pill"
                 onClick={(e) => {
-                  if (stopRowPropagation) e.stopPropagation()
+                  guardClick(e)
                   handleUndo()
                 }}
               >
@@ -217,7 +265,20 @@ export function RolePopover({
           ) : notice.kind === 'reverted' ? (
             <>↺ Reverted</>
           ) : (
-            <>⚠ {notice.message}</>
+            <>
+              ⚠ {notice.message}{' '}
+              <button
+                type="button"
+                className="role-popover-notice-close"
+                onClick={(e) => {
+                  guardClick(e)
+                  dismissNotice()
+                }}
+                aria-label="Dismiss error"
+              >
+                ✕
+              </button>
+            </>
           )}
         </span>
       ) : null}

@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   title: 'People',
 }
 
-type SortMode = 'recent' | 'alpha'
+type SortMode = 'recent' | 'alpha' | 'alpha-desc'
 
 interface PeoplePageProps {
   searchParams: Promise<{ q?: string; sort?: string }>
@@ -38,7 +38,12 @@ interface ContactBrandJoin extends ContactBrand {
 export default async function PeoplePage({ searchParams }: PeoplePageProps) {
   const { q: rawQ, sort: rawSort } = await searchParams
   const q = (rawQ ?? '').trim()
-  const sort: SortMode = rawSort === 'alpha' ? 'alpha' : 'recent'
+  const sort: SortMode =
+    rawSort === 'alpha'
+      ? 'alpha'
+      : rawSort === 'alpha-desc'
+        ? 'alpha-desc'
+        : 'recent'
 
   const supabase = await createClient()
 
@@ -107,6 +112,9 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
   const sorted = [...filtered].sort((a, b) => {
     if (sort === 'alpha') {
       return a.display_name.localeCompare(b.display_name)
+    }
+    if (sort === 'alpha-desc') {
+      return b.display_name.localeCompare(a.display_name)
     }
     // 'recent': last_touch_at descending; null last_touch lands at the bottom.
     if (a.last_touch_at && b.last_touch_at) {

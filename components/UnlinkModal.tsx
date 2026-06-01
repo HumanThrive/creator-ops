@@ -89,6 +89,15 @@ export function UnlinkModal({
     <div
       className="pitch-modal-overlay"
       onClick={(e) => {
+        // Block bubble-to-anchor + native href-follow when this modal is
+        // mounted inside a Next.js <Link> row (e.g., BrandContactsTable's
+        // role-popover → unlink flow). preventDefault stops the browser's
+        // anchor activation; stopPropagation stops React's Link onClick.
+        // Both fire unconditionally — harmless when modal is mounted outside
+        // any Link tree. Founder smoke 3.5 2026-06-01 (mirrors the 3.2 fix
+        // applied to RolePopover earlier this session).
+        e.preventDefault()
+        e.stopPropagation()
         if (e.target === e.currentTarget && !submitting) onClose()
       }}
     >
