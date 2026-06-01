@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import type { ContactSummary } from '@/lib/contact-stats'
 import { CHANNEL_KIND_CLASS, ROLE_CLASS } from '@/lib/types/contact'
 import { formatRelativeTime } from '@/lib/format'
 import { NewContactTrigger } from '@/components/NewContactTrigger'
+import { CombineLauncher } from '@/components/CombineLauncher'
 
 // FR-8 S1 (slice #75) — `/app/people` list component per spec Delta 2.
 // Variant B 7-col row (locked); search + sort URL-persisted; multi-role +N
@@ -16,6 +17,13 @@ import { NewContactTrigger } from '@/components/NewContactTrigger'
 // State model: parent server component owns the filtering + sorting; this
 // client component owns the input affordances and routes via router.replace
 // to re-trigger the server render with new ?q= / ?sort= URL params.
+//
+// FR-9 #84 (2026-06-02) — Story 4 proactive select-two. "Select" toggle in
+// the section-h-actions flips the list into selection mode; rows become
+// click-to-toggle (NOT link-to-detail); a Combine CTA appears + becomes
+// enabled when exactly 2 contacts are selected (AC-M3 pairwise v1).
+// Default survivor = the contact with more linked pitches per AC1.3;
+// CombineLauncher then handles the rest of the flow.
 
 type SortMode = 'recent' | 'alpha' | 'alpha-desc'
 
@@ -32,6 +40,57 @@ export function PeopleList({ contacts, totalCount, query, sort }: PeopleListProp
   const router = useRouter()
   const searchParams = useSearchParams()
   const [localQ, setLocalQ] = useState(query)
+
+  // FR-9 #84 — selection mode for proactive Combine.
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [combineOpen, setCombineOpen] = useState<{
+    keeperId: string
+    keeperName: string
+    loserId: string
+    loserName: string
+  } | null>(null)
+
+  // Toggle row in/out of selection. Cap at 2 (AC-M3 pairwise v1) — clicking
+  // a 3rd while 2 are already selected is a no-op (no eviction; user
+  // de-selects first). Keeps the contract simple + matches the affordance
+  // shape ("Combine appears when exactly 2 are selected").
+  const toggleRow = useCallback((contactId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(contactId)) {
+        next.delete(contactId)
+        return next
+      }
+      if (next.size >= 2) return prev // pairwise cap
+      next.add(contactId)
+      return next
+    })
+  }, [])
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false)
+    setSelectedIds(new Set())
+  }, [])
+
+  // AC1.3 — default keeper = more-history (more linked pitches). Resolve
+  // both selected ContactSummary rows + pick the keeper by pitch_count;
+  // ties go to the first-selected (deterministic; user can always swap
+  // keeper inside the wizard's Review step).
+  function onCombineClick() {
+    if (selectedIds.size !== 2) return
+    const picked = contacts.filter((c) => selectedIds.has(c.id))
+    if (picked.length !== 2) return
+    const [a, b] = picked
+    const keeper = a.pitch_count >= b.pitch_count ? a : b
+    const loser = keeper.id === a.id ? b : a
+    setCombineOpen({
+      keeperId: keeper.id,
+      keeperName: keeper.display_name,
+      loserId: loser.id,
+      loserName: loser.display_name,
+    })
+  }
 
   // Debounced URL sync — every keystroke updates localQ; after
   // SEARCH_DEBOUNCE_MS of quiet, route to `?q=...`.
@@ -109,6 +168,37 @@ export function PeopleList({ contacts, totalCount, query, sort }: PeopleListProp
             </button>
           </div>
           <NewContactTrigger />
+          {/* FR-9 #84 — Select toggle + Combine CTA. Combine is gated on
+              exactly 2 selected per AC-M3 pairwise v1. */}
+          {selectionMode ? (
+            <>
+              <button
+                type="button"
+                className="btn-pill"
+                onClick={onCombineClick}
+                disabled={selectedIds.size !== 2}
+                aria-label="Combine the two selected contacts"
+              >
+                Combine {selectedIds.size}/2 →
+              </button>
+              <button
+                type="button"
+                className="sort-btn"
+                onClick={exitSelectionMode}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="sort-btn"
+              onClick={() => setSelectionMode(true)}
+              aria-label="Enter selection mode to combine two contacts"
+            >
+              Select
+            </button>
+          )}
         </div>
       </div>
 
@@ -120,7 +210,7 @@ export function PeopleList({ contacts, totalCount, query, sort }: PeopleListProp
           </p>
         </div>
       ) : (
-        <div className="contacts-table">
+        <div className={`contacts-table ${selectionMode ? 'is-selection-mode' : ''}`}>
           <div className="contacts-table-h">
             <span>Name · Chain</span>
             <span>Role</span>
@@ -131,25 +221,65 @@ export function PeopleList({ contacts, totalCount, query, sort }: PeopleListProp
             <span aria-hidden="true" />
           </div>
           {contacts.map((c) => (
-            <ContactRow key={c.id} contact={c} />
+            <ContactRow
+              key={c.id}
+              contact={c}
+              selectionMode={selectionMode}
+              isSelected={selectedIds.has(c.id)}
+              onToggle={toggleRow}
+            />
           ))}
         </div>
       )}
+
+      {combineOpen ? (
+        <CombineLauncher
+          knownContactId={combineOpen.loserId}
+          knownContactName={combineOpen.loserName}
+          preselectedKeeperId={combineOpen.keeperId}
+          onClose={() => {
+            setCombineOpen(null)
+            exitSelectionMode()
+            // Refresh the list to pick up the post-merge state (loser gone,
+            // survivor enriched). The CombineLauncher already calls
+            // router.refresh on success, but firing it again here is cheap
+            // + ensures the list updates if the user cancels mid-flow
+            // (router.refresh is a no-op when nothing changed).
+            router.refresh()
+          }}
+        />
+      ) : null}
     </>
   )
 }
 
-function ContactRow({ contact }: { contact: ContactSummary }) {
+interface ContactRowProps {
+  contact: ContactSummary
+  selectionMode: boolean
+  isSelected: boolean
+  onToggle: (contactId: string) => void
+}
+
+function ContactRow({ contact, selectionMode, isSelected, onToggle }: ContactRowProps) {
   // Internal-link gen: prefer slug; fall back to uuid (Delta 6).
   const href = `/app/people/${contact.slug ?? contact.id}`
 
   const chainText = renderChainSub(contact)
   const currentRole = contact.current_role
   const showRoleAffix = contact.has_multi_roles && contact.brand_count > 1
+  const rowClass = `contacts-table-row${isSelected ? ' is-selected' : ''}`
 
-  return (
-    <Link href={href} className="contacts-table-row">
+  // In selection mode, the row is a button (click toggles); otherwise it's
+  // a Link to the contact's detail page (default behavior).
+  const innerContent = (
+    <>
       <div className="ctc-name">
+        {selectionMode && (
+          <span
+            className={`ctc-select-mark ${isSelected ? 'is-on' : ''}`}
+            aria-hidden="true"
+          />
+        )}
         <div className="ctc-avatar">{initials(contact.display_name)}</div>
         <div className="ctc-name-body">
           <span className="ctc-name-l">{contact.display_name}</span>
@@ -241,7 +371,27 @@ function ContactRow({ contact }: { contact: ContactSummary }) {
         )}
       </span>
 
-      <span className="ctc-arrow">→</span>
+      <span className="ctc-arrow">{selectionMode ? (isSelected ? '✓' : '＋') : '→'}</span>
+    </>
+  )
+
+  if (selectionMode) {
+    return (
+      <button
+        type="button"
+        className={rowClass}
+        onClick={() => onToggle(contact.id)}
+        aria-pressed={isSelected}
+        aria-label={`${isSelected ? 'Deselect' : 'Select'} ${contact.display_name}`}
+      >
+        {innerContent}
+      </button>
+    )
+  }
+
+  return (
+    <Link href={href} className={rowClass}>
+      {innerContent}
     </Link>
   )
 }

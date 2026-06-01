@@ -7223,6 +7223,59 @@
 }
 
 /* ============================================================================
+ * FR-9 #84: PeopleList selection-mode — Story 4 proactive select-two
+ * ============================================================================
+ * Per AC-M3 (pairwise v1) + AC1.3 (default keeper = more-history). Adds a
+ * selection visual on .contacts-table-row when the parent flips the table
+ * into is-selection-mode. Rows render as <button> in selection mode (not
+ * <Link>) — PeopleList handles the render-shape switch; this CSS only
+ * styles the selected state + the leading mark.
+ * ============================================================================ */
+
+.contacts-table.is-selection-mode .contacts-table-row {
+  cursor: pointer;
+  /* Button-reset for the row when it renders as a <button> in selection mode */
+  background: var(--paper);
+  border: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+.contacts-table.is-selection-mode .contacts-table-row:hover {
+  background: var(--paper-2);
+}
+.contacts-table-row.is-selected {
+  background: rgba(42, 111, 219, 0.06);
+  box-shadow: inset 2px 0 0 var(--pick);
+}
+.contacts-table-row.is-selected:hover {
+  background: rgba(42, 111, 219, 0.10);
+}
+.ctc-select-mark {
+  width: 16px; height: 16px; border-radius: 4px;
+  border: 1.5px solid var(--ink-3);
+  background: var(--paper);
+  flex: 0 0 auto;
+  margin-right: 4px;
+  display: inline-block;
+  position: relative;
+}
+.ctc-select-mark.is-on {
+  background: var(--pick); border-color: var(--pick);
+}
+.ctc-select-mark.is-on::after {
+  content: "";
+  position: absolute;
+  left: 4px; top: 1px;
+  width: 5px; height: 9px;
+  border-right: 2px solid var(--paper);
+  border-bottom: 2px solid var(--paper);
+  transform: rotate(45deg);
+}
+
+/* ============================================================================
  * FR-9 #82: CombineWizard — Contact merge wizard (3-step modal + success)
  * ============================================================================
  * Spec: workspace/build-requests/FR-9-contact-merge.md (Final Consolidated Spec)
