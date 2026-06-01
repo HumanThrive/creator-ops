@@ -263,6 +263,7 @@ export function ChannelsEditor({ contactId, initialChannels }: ChannelsEditorPro
       {dupEmail ? (
         <DupEmailCallout
           email={dupEmail}
+          editingContactId={contactId}
           onDismiss={() => setDupEmail(null)}
         />
       ) : null}
