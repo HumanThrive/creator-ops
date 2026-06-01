@@ -29,6 +29,15 @@
   --line-board: #DDE0E9;
   --slate-edge: #9CA3AF;
 
+  /* Interactive / selected / affirmative accent (FR-9 Delta D6 — first consumer
+     is the Combine wizard at #82; system-wide committed per Founder 2026-06-01
+     [[--pick token system-wide]] — no retrofit of existing UI; surfaces adopt
+     it incrementally as built/touched). Splits "selected / chosen / active"
+     from --accent (which stays reserved for the brand mark + the single
+     irreversible-confirm consequence). Calm blue prevents interactive elements
+     reading as error states. */
+  --pick: #2A6FDB;
+
   /* Channel-color tokens (FR-7 W68; per Design Delta 1 + Gap 1 (b) Founder lock 2026-05-25).
      6 canonized in design canon CLAUDE.md §7 item 41 (Email · IG · TikTok ·
      WhatsApp · X · IRL); 3 added (Facebook · LinkedIn · Website) per Gap 1 (b).
@@ -7211,4 +7220,558 @@
     transition: none !important;
     animation: none !important;
   }
+}
+
+/* ============================================================================
+ * FR-9 #82: CombineWizard — Contact merge wizard (3-step modal + success)
+ * ============================================================================
+ * Spec: workspace/build-requests/FR-9-contact-merge.md (Final Consolidated Spec)
+ * Design canon: docs/design/design_handoff_combine_wizard/README.md
+ *               + Combine Wizard Stress-Test.html (visual contract)
+ * V1-trims per LD sizing-consult: preview computes once on Step-3 entry
+ * (button, not live-reactive per pick); static step transitions (defer
+ * Delta-7 animation/reduced-motion polish); flex/grid approx if subgrid
+ * fights container stack.
+ *
+ * Class family: .cw-* (CombineWizard); reuses .modal-card / .modal-band /
+ * .modal-foot canonical chrome with .cw-card / .cw-band modifier overrides
+ * for the wider shell + step rail + custom band layout.
+ * --pick token (#2A6FDB) is the FIRST consumer of the D6 system-wide token.
+ * ============================================================================ */
+
+/* ─── Wider shell: 980px for the wizard vs 560px default modal-card ────────── */
+.modal-card.cw-card {
+  max-width: 980px;
+  max-height: 90vh;
+  border: none;
+  box-shadow: 0 24px 56px -16px rgba(10, 14, 28, 0.34);
+}
+
+/* ─── Custom header band: slate ground, step rail centered ────────────────── */
+.modal-band.cw-band {
+  padding: 13px 26px;
+  background: var(--paper-board);
+  border-bottom: 1px solid var(--line-board);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 18px;
+}
+.cw-band-l {
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.cw-band-l::before {
+  content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+}
+.cw-band-close {
+  background: transparent; border: 0; padding: 4px 8px;
+  font-size: 16px; color: var(--ink-3); cursor: pointer;
+  line-height: 1;
+}
+.cw-band-close:hover { color: var(--ink); }
+
+/* ─── Step rail (header center): 3 steps + hairline separators ────────────── */
+.cw-rail {
+  display: inline-flex; align-items: center; gap: 14px;
+  justify-self: center;
+}
+.cw-rail-step {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: transparent; border: 0; padding: 0;
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-4);
+  cursor: pointer;
+}
+.cw-rail-step .cw-rail-chip {
+  width: 19px; height: 19px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 9px;
+  border: 1px solid var(--line-2); color: var(--ink-4);
+  background: var(--paper);
+}
+.cw-rail-step.is-active { color: var(--ink); }
+.cw-rail-step.is-active .cw-rail-chip {
+  background: var(--ink); color: var(--paper); border-color: var(--ink);
+}
+.cw-rail-step.is-done { color: var(--ink-3); }
+.cw-rail-step.is-done .cw-rail-chip {
+  background: var(--paper); color: var(--pick); border-color: var(--pick);
+}
+.cw-rail-sep {
+  width: 26px; height: 1px; background: var(--line-2);
+}
+
+/* ─── Footer: Cancel left + step-help, Back/Next right ────────────────────── */
+.modal-foot.cw-foot {
+  padding: 14px 26px;
+  border-top: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.cw-foot-l { display: inline-flex; align-items: center; gap: 14px; }
+.cw-cancel {
+  background: transparent; border: 0; padding: 0;
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-4);
+  cursor: pointer;
+}
+.cw-cancel:hover { color: var(--ink-2); }
+.cw-step-help {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+.cw-foot-r { display: inline-flex; align-items: center; gap: 10px; }
+
+/* ─── Body wrapper: scrolls within the wizard shell ───────────────────────── */
+.cw-body {
+  padding: 0;
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+
+/* ─── Step 1: Summary banner + two-column Review ──────────────────────────── */
+.cw-summary {
+  padding: 18px 26px;
+  background: var(--paper-board);
+  border-bottom: 1px solid var(--line-board);
+  display: flex; align-items: center; justify-content: space-between; gap: 18px;
+}
+.cw-summary-text {
+  font-family: var(--body); font-size: 14px; color: var(--ink-2);
+  line-height: 1.5; margin: 0;
+}
+.cw-summary-text b { color: var(--ink); font-weight: 600; }
+.cw-summary-chips {
+  display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.cw-chip {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+  background: var(--paper); padding: 4px 8px; border-radius: 4px;
+  border: 1px solid var(--line-2);
+}
+.cw-chip.is-pick { color: var(--pick); border-color: var(--pick); }
+
+.cw-review {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  position: relative;
+  border-bottom: 1px solid var(--line);
+}
+.cw-review::before {
+  /* Vertical hairline between columns. */
+  content: ""; position: absolute; top: 0; bottom: 0; left: 50%;
+  width: 1px; background: var(--line);
+}
+
+.cw-col {
+  padding: 22px 26px;
+  display: flex; flex-direction: column; gap: 14px;
+  background: var(--paper);
+}
+.cw-col.is-keep {
+  box-shadow: inset 2px 0 0 var(--pick);
+  background: linear-gradient(180deg, rgba(42, 111, 219, 0.04), transparent 80px), var(--paper);
+}
+.cw-col:last-child.is-keep {
+  box-shadow: inset -2px 0 0 var(--pick);
+}
+
+.cw-col-head {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  background: transparent; border-width: 0 0 1px 0;
+  width: 100%; text-align: left;
+}
+.cw-col-avatar {
+  width: 44px; height: 44px; border-radius: 5px;
+  background: var(--paper-2); color: var(--ink-3);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--body); font-size: 18px; font-weight: 700;
+  flex: 0 0 auto;
+}
+.cw-col.is-keep .cw-col-avatar {
+  background: var(--ink); color: var(--paper);
+}
+.cw-col-id { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; }
+.cw-col-name {
+  font-family: var(--body); font-size: 18px; font-weight: 600;
+  color: var(--ink); line-height: 1.2;
+}
+.cw-col-slug {
+  font-family: var(--mono); font-size: 10px; color: var(--ink-4);
+  letter-spacing: 0.08em;
+}
+.cw-col-pick {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+  padding: 6px 10px; border: 1px solid var(--line-2); border-radius: 999px;
+  background: var(--paper);
+  flex: 0 0 auto;
+}
+.cw-col.is-keep .cw-col-pick {
+  color: var(--pick); border-color: var(--pick); background: rgba(42, 111, 219, 0.06);
+}
+.cw-pick-radio {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 1.5px solid var(--ink-3);
+  display: inline-block;
+}
+.cw-col.is-keep .cw-pick-radio {
+  border-color: var(--pick); background: var(--pick);
+  box-shadow: inset 0 0 0 2px var(--paper);
+}
+
+.cw-col-foldlabel {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-4);
+  margin-top: 6px;
+}
+.cw-col.is-keep .cw-col-foldlabel { display: none; }
+
+.cw-field {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.cw-field-l {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.cw-field-l-tag {
+  font-family: var(--mono); font-size: 9px; font-weight: 500;
+  letter-spacing: 0.10em; color: var(--ink-4);
+  text-transform: uppercase;
+  padding: 1px 6px; border-radius: 3px;
+  background: var(--paper-board);
+}
+.cw-field-v {
+  font-family: var(--body); font-size: 14px; color: var(--ink);
+  line-height: 1.45;
+}
+.cw-field-list {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 4px;
+  font-family: var(--body); font-size: 13px; color: var(--ink-2);
+}
+.cw-field-list li {
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* Merge-direction badge centered on the column divider */
+.cw-merge {
+  position: absolute; top: 90px; left: 50%;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--pick); color: var(--paper);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 16px;
+  transform: translateX(-50%);
+  box-shadow: 0 2px 10px rgba(42, 111, 219, 0.35);
+  transition: transform 0.18s ease;
+  z-index: 2;
+}
+.cw-merge[data-direction="left"] { transform: translateX(-50%) scaleX(-1); }
+
+/* ─── Step 2: Resolve — per-conflict choosers + carry-over panel ──────────── */
+.cw-resolve {
+  padding: 24px 26px;
+  display: flex; flex-direction: column; gap: 20px;
+  background: var(--paper);
+}
+.cw-resolve-h {
+  font-family: var(--display); font-weight: 400;
+  font-size: clamp(28px, 4vw, 34px);
+  line-height: 0.95; letter-spacing: 0.005em;
+  text-transform: uppercase; color: var(--ink); margin: 0;
+}
+.cw-resolve-h .dot { color: var(--accent); }
+.cw-resolve-sub {
+  font-family: var(--body); font-size: 14px; line-height: 1.5; color: var(--ink-2);
+  margin: 0;
+}
+.cw-resolve-sub b { color: var(--ink); font-weight: 600; }
+
+.cw-conflict {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 24px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.cw-conflict:first-of-type { border-top: 0; padding-top: 4px; }
+.cw-conflict-l {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.cw-conflict-title {
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2);
+}
+.cw-conflict-why {
+  font-family: var(--body); font-size: 12.5px; color: var(--ink-4);
+  line-height: 1.45;
+}
+.cw-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr; gap: 12px;
+}
+.cw-choice {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px;
+  background: var(--paper); border: 1px solid var(--line-2); border-radius: 5px;
+  cursor: pointer;
+  text-align: left;
+}
+.cw-choice.is-selected {
+  border-color: var(--pick);
+  background: rgba(42, 111, 219, 0.06);
+  box-shadow: inset 0 0 0 1px var(--pick);
+}
+.cw-choice-marker {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 1.5px solid var(--ink-3);
+  flex: 0 0 auto; margin-top: 2px;
+}
+.cw-choice.is-selected .cw-choice-marker {
+  border-color: var(--pick); background: var(--pick);
+  box-shadow: inset 0 0 0 2.5px var(--paper);
+}
+.cw-choice-text { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; }
+.cw-choice-who {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-4);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.cw-choice-who-preset {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.10em;
+  color: var(--pick); text-transform: uppercase;
+}
+.cw-choice-v {
+  font-family: var(--body); font-size: 14px; color: var(--ink); line-height: 1.35;
+}
+.cw-choice-v.is-mono { font-family: var(--mono); font-size: 13px; }
+
+.cw-carry {
+  margin-top: 4px;
+  padding: 14px 16px;
+  background: var(--paper-board);
+  border: 1px solid var(--line-board); border-radius: 5px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.cw-carry-h {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+}
+.cw-carry-list {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.cw-carry-list li {
+  font-family: var(--body); font-size: 13px; color: var(--ink-2);
+  line-height: 1.4;
+  display: flex; align-items: center; gap: 8px;
+}
+.cw-carry-list li::before {
+  content: "→"; color: var(--ink-4); font-family: var(--mono); font-size: 11px;
+  flex: 0 0 auto;
+}
+
+/* ─── Step 3: Preview — full-replacement result card + confirm bar ────────── */
+.cw-preview {
+  padding: 0;
+  display: flex; flex-direction: column;
+  background: var(--paper);
+}
+.cw-preview-banner {
+  padding: 12px 26px;
+  background: rgba(42, 111, 219, 0.05);
+  border-bottom: 1px solid rgba(42, 111, 219, 0.18);
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--pick);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.cw-preview-banner::before {
+  content: "✦"; font-size: 12px;
+}
+.cw-result {
+  padding: 24px 26px;
+  display: flex; flex-direction: column; gap: 22px;
+}
+.cw-result-head {
+  display: flex; align-items: center; gap: 18px;
+  padding-bottom: 18px; border-bottom: 1px solid var(--line);
+}
+.cw-result-avatar {
+  width: 80px; height: 80px; border-radius: 6px;
+  background: var(--ink); color: var(--paper);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--body); font-size: 32px; font-weight: 700;
+  flex: 0 0 auto;
+}
+.cw-result-id { display: flex; flex-direction: column; gap: 4px; }
+.cw-result-h1 {
+  font-family: var(--display); font-weight: 400;
+  font-size: clamp(40px, 6vw, 64px);
+  line-height: 0.9; letter-spacing: 0.005em;
+  text-transform: uppercase; color: var(--ink); margin: 0;
+}
+.cw-result-meta {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+
+.cw-result-block { display: flex; flex-direction: column; gap: 10px; }
+.cw-result-block-h {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.cw-result-block-h-tag {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.10em;
+  color: var(--pick); text-transform: uppercase;
+}
+
+.cw-channels {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.cw-channel {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 10px;
+  background: var(--paper); border: 1px solid var(--line-2); border-radius: 999px;
+  font-family: var(--body); font-size: 13px; color: var(--ink-2);
+}
+.cw-channel-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  flex: 0 0 auto;
+}
+.cw-channel-primary {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--pick);
+  padding: 1px 6px; border-radius: 3px;
+  background: rgba(42, 111, 219, 0.10);
+}
+
+.cw-brand-cards {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.cw-brand-card {
+  padding: 14px 16px;
+  background: var(--paper); border: 1px solid var(--line-2); border-radius: 5px;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+}
+.cw-brand-card.is-pick { border-color: var(--pick); }
+.cw-brand-card-l { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; }
+.cw-brand-card-name {
+  font-family: var(--body); font-size: 15px; font-weight: 600; color: var(--ink);
+}
+.cw-brand-card-meta {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.10em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+.cw-brand-card-r {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.10em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+
+.cw-history {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--line-2); border-radius: 5px;
+  overflow: hidden;
+}
+.cw-history-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 1fr;
+  gap: 12px; align-items: center;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  font-family: var(--body); font-size: 13px; color: var(--ink-2);
+}
+.cw-history-row:first-child { border-top: 0; }
+.cw-history-row.is-from-loser {
+  background: rgba(42, 111, 219, 0.04);
+}
+.cw-history-date {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+.cw-history-from {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.10em;
+  text-transform: uppercase; color: var(--pick);
+  margin-left: 6px;
+}
+
+.cw-confirm {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  padding: 18px 26px;
+  background: var(--paper-board);
+  border-top: 1px solid var(--line-board);
+}
+.cw-confirm-text { display: flex; flex-direction: column; gap: 4px; }
+.cw-confirm-dest {
+  font-family: var(--body); font-size: 15px; color: var(--ink); font-weight: 600;
+}
+.cw-confirm-dest b { color: var(--ink); }
+.cw-confirm-dest .cw-slug {
+  font-family: var(--mono); font-size: 12px; color: var(--ink-3);
+}
+.cw-confirm-undo {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+.cw-confirm-err {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.10em;
+  text-transform: uppercase; color: var(--accent);
+  margin-top: 6px;
+}
+
+/* ─── Step 4: Done success state ──────────────────────────────────────────── */
+.cw-done {
+  padding: 56px 26px 48px;
+  display: flex; flex-direction: column; align-items: center; gap: 18px;
+  text-align: center;
+}
+.cw-done-stamp {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.18em; text-transform: uppercase; color: var(--pick);
+  padding: 5px 12px; border-radius: 999px;
+  background: rgba(42, 111, 219, 0.10);
+}
+.cw-done-h1 {
+  font-family: var(--display); font-weight: 400;
+  font-size: clamp(40px, 6vw, 64px);
+  line-height: 0.95; letter-spacing: 0.005em;
+  text-transform: uppercase; color: var(--ink); margin: 0;
+}
+.cw-done-body {
+  font-family: var(--body); font-size: 14px; color: var(--ink-2); line-height: 1.55;
+  max-width: 560px;
+}
+.cw-done-body b { color: var(--ink); font-weight: 600; }
+
+/* ─── Responsive: @container app ≤760px — one-column stack ────────────────── */
+@container app (max-width: 760px) {
+  .modal-card.cw-card { max-width: 100%; max-height: 95vh; }
+  .modal-band.cw-band { padding: 11px 16px; gap: 10px; grid-template-columns: auto 1fr auto; }
+  .cw-rail { gap: 8px; }
+  .cw-rail-sep { width: 14px; }
+  .cw-summary { padding: 14px 16px; flex-direction: column; align-items: flex-start; gap: 10px; }
+  .cw-review { grid-template-columns: 1fr; }
+  .cw-review::before { display: none; }
+  .cw-col { padding: 18px 16px; }
+  .cw-col.is-keep { box-shadow: inset 0 2px 0 var(--pick); }
+  .cw-col:last-child.is-keep { box-shadow: inset 0 2px 0 var(--pick); }
+  .cw-merge { display: none; }
+  .cw-resolve { padding: 20px 16px; }
+  .cw-conflict { grid-template-columns: 1fr; gap: 12px; }
+  .cw-choices { grid-template-columns: 1fr; }
+  .cw-result { padding: 20px 16px; }
+  .cw-result-h1 { font-size: clamp(32px, 8vw, 44px); }
+  .cw-history-row { grid-template-columns: 70px 1fr; }
+  .cw-history-row > :last-child { display: none; }
+  .cw-confirm { padding: 14px 16px; flex-direction: column; align-items: stretch; gap: 12px; }
+  .cw-foot { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+  .cw-step-help { display: none; }
 }
