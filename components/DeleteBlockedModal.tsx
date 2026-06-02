@@ -9,7 +9,7 @@ import {
   type RefObject,
 } from 'react'
 import { useRouter } from 'next/navigation'
-import { FR9PlaceholderModal } from '@/components/FR9PlaceholderModal'
+import { CombineLauncher } from '@/components/CombineLauncher'
 import { UnlinkModal } from '@/components/UnlinkModal'
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion'
 import type { ContactRole } from '@/lib/types/contact'
@@ -73,7 +73,11 @@ export function DeleteBlockedModal({
   onClose,
 }: DeleteBlockedModalProps) {
   const router = useRouter()
-  const [fr9Open, setFr9Open] = useState(false)
+  // FR-9 #83 (2026-06-02) — Combine duplicates path-card opens the real
+  // CombineLauncher (typeahead-pick second contact → load merge inputs →
+  // mount CombineWizard). Replaces the FR-8-era FR9PlaceholderModal stub.
+  // The blocked Contact is always the LOSER per AC1.2; user picks the keeper.
+  const [combineOpen, setCombineOpen] = useState(false)
   const [unlinkPair, setUnlinkPair] = useState<ActiveBrandLink | null>(null)
 
   // Live brand count overrides the prop after each unlink — the prop is a
@@ -99,13 +103,13 @@ export function DeleteBlockedModal({
   // ESC closes the whole modal (not just the current body state — modal close X owns absolute close)
   useEffect(() => {
     function onKey(ev: KeyboardEvent) {
-      if (ev.key === 'Escape' && !fr9Open && !unlinkPair && !animatingRef.current) {
+      if (ev.key === 'Escape' && !combineOpen && !unlinkPair && !animatingRef.current) {
         onClose()
       }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [onClose, fr9Open, unlinkPair])
+  }, [onClose, combineOpen, unlinkPair])
 
   // Focus management — runs after a body swap settles
   const focusFor = useCallback((next: BodyState) => {
@@ -278,7 +282,7 @@ export function DeleteBlockedModal({
                   activeLinksCount={activeBrandLinks.length}
                   singleBrand={singleBrand}
                   hasActiveLinks={hasActiveLinks}
-                  onCombineClick={() => setFr9Open(true)}
+                  onCombineClick={() => setCombineOpen(true)}
                   onEndBrandLinkClick={onEndBrandLinkClick}
                   endLinkCardRef={endLinkCardRef}
                 />
@@ -297,7 +301,14 @@ export function DeleteBlockedModal({
         </div>
       </div>
 
-      {fr9Open ? <FR9PlaceholderModal onClose={() => setFr9Open(false)} /> : null}
+      {combineOpen ? (
+        <CombineLauncher
+          knownContactId={contactId}
+          knownContactName={contactName}
+          preselectedKeeperId={null}
+          onClose={() => setCombineOpen(false)}
+        />
+      ) : null}
       {unlinkPair ? (
         <UnlinkModal
           contactId={contactId}

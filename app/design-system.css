@@ -29,6 +29,15 @@
   --line-board: #DDE0E9;
   --slate-edge: #9CA3AF;
 
+  /* Interactive / selected / affirmative accent (FR-9 Delta D6 — first consumer
+     is the Combine wizard at #82; system-wide committed per Founder 2026-06-01
+     [[--pick token system-wide]] — no retrofit of existing UI; surfaces adopt
+     it incrementally as built/touched). Splits "selected / chosen / active"
+     from --accent (which stays reserved for the brand mark + the single
+     irreversible-confirm consequence). Calm blue prevents interactive elements
+     reading as error states. */
+  --pick: #2A6FDB;
+
   /* Channel-color tokens (FR-7 W68; per Design Delta 1 + Gap 1 (b) Founder lock 2026-05-25).
      6 canonized in design canon CLAUDE.md §7 item 41 (Email · IG · TikTok ·
      WhatsApp · X · IRL); 3 added (Facebook · LinkedIn · Website) per Gap 1 (b).
@@ -1025,6 +1034,29 @@
 .sort-btn.active {
   background: var(--ink);
   color: var(--paper);
+}
+/* Smoke fix 2026-06-02 §4.2(b) — primary-CTA variant matches `.sort-btn` size
+   so the Combine button sits at the same scale as Select / Cancel / sort
+   chips in the section-h-actions row. Ink fill + accent leading dot when
+   enabled; muted when disabled (pre-2/2). */
+.sort-btn.is-primary {
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 600;
+  padding-left: 18px;
+  position: relative;
+}
+.sort-btn.is-primary::before {
+  content: "";
+  position: absolute;
+  left: 9px; top: 50%;
+  transform: translateY(-50%);
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent);
+}
+.sort-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .brand-list {
@@ -5744,6 +5776,28 @@
   color: inherit;
   text-decoration: none;
 }
+/* Smoke fix 2026-06-02 §4.2(a) — button-element reset for selection-mode
+   rendering. The row flips from <a> (default) to <button> when the parent
+   is in selection mode; without this reset, browser `<button>` defaults
+   (text-align: center, font: button, default border on all sides,
+   border-radius on Safari/macOS) override the row's grid layout. Use
+   !important on border longhands because some user-agent stylesheets win
+   the cascade for button-default borders even at higher specificity. */
+button.contacts-table-row {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  text-align: inherit;
+  width: 100%;
+  border-top: 0 !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-bottom: 1px solid var(--line-board) !important;
+  border-radius: 0;
+}
+button.contacts-table-row:last-child {
+  border-bottom: 0 !important;
+}
 .contacts-table-row:last-child { border-bottom: none; }
 .contacts-table-row:hover { background: var(--paper-2); }
 
@@ -6911,6 +6965,15 @@
 .dup-email-callout-actions {
   display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap;
 }
+/* CREATE flow variant — Founder direction 2026-06-02 §2.3-2.5: primary CTA
+   ("Open <name> Contact") gets its own row; "Use a different email" on its own
+   row below; both centered. Stacked layout gives the primary button room for
+   the variable-length owner name without competing for horizontal space. */
+.dup-email-callout-actions.is-stacked {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 10px;
+  width: 100%;
+}
 .dup-email-callout-sub {
   font-family: var(--mono); font-size: 10px; font-weight: 500;
   letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent);
@@ -7211,4 +7274,1000 @@
     transition: none !important;
     animation: none !important;
   }
+}
+
+/* ============================================================================
+ * FR-9 #84: PeopleList selection-mode — Story 4 proactive select-two
+ * ============================================================================
+ * Per AC-M3 (pairwise v1) + AC1.3 (default keeper = more-history). Adds a
+ * selection visual on .contacts-table-row when the parent flips the table
+ * into is-selection-mode. Rows render as <button> in selection mode (not
+ * <Link>) — PeopleList handles the render-shape switch; this CSS only
+ * styles the selected state + the leading mark.
+ * ============================================================================ */
+
+.contacts-table.is-selection-mode .contacts-table-row {
+  cursor: pointer;
+  /* Button-reset for the row when it renders as a <button> in selection mode */
+  background: var(--paper);
+  border: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+.contacts-table.is-selection-mode .contacts-table-row:hover {
+  background: var(--paper-2);
+}
+.contacts-table-row.is-selected {
+  background: rgba(42, 111, 219, 0.06);
+  box-shadow: inset 2px 0 0 var(--pick);
+}
+.contacts-table-row.is-selected:hover {
+  background: rgba(42, 111, 219, 0.10);
+}
+.ctc-select-mark {
+  width: 16px; height: 16px; border-radius: 4px;
+  border: 1.5px solid var(--ink-3);
+  background: var(--paper);
+  flex: 0 0 auto;
+  margin-right: 4px;
+  display: inline-block;
+  position: relative;
+}
+.ctc-select-mark.is-on {
+  background: var(--pick); border-color: var(--pick);
+}
+.ctc-select-mark.is-on::after {
+  content: "";
+  position: absolute;
+  left: 4px; top: 1px;
+  width: 5px; height: 9px;
+  border-right: 2px solid var(--paper);
+  border-bottom: 2px solid var(--paper);
+  transform: rotate(45deg);
+}
+
+/* ============================================================================
+ * FR-9 #82: CombineWizard — Contact merge wizard (3-step modal + success)
+ * ============================================================================
+ * Spec: workspace/build-requests/FR-9-contact-merge.md (Final Consolidated Spec)
+ * Design canon: docs/design/design_handoff_combine_wizard/README.md
+ *               + Combine Wizard Stress-Test.html (visual contract)
+ * V1-trims per LD sizing-consult: preview computes once on Step-3 entry
+ * (button, not live-reactive per pick); static step transitions (defer
+ * Delta-7 animation/reduced-motion polish); flex/grid approx if subgrid
+ * fights container stack.
+ *
+ * Class family: .cw-* (CombineWizard); reuses .modal-card / .modal-band /
+ * .modal-foot canonical chrome with .cw-card / .cw-band modifier overrides
+ * for the wider shell + step rail + custom band layout.
+ * --pick token (#2A6FDB) is the FIRST consumer of the D6 system-wide token.
+ * ============================================================================ */
+
+/* ─── Wider shell: 980px for the wizard vs 560px default modal-card ─────────
+   Mobile layout direction 2026-06-03 — modal becomes a pinned-shell (header +
+   footer flex 0 0 auto, body flex 1 1 auto with internal overflow). The shell
+   itself uses `overflow: hidden` so the body scrolls within rather than the
+   whole modal scrolling. Inherited from `.modal-card`'s `display: flex;
+   flex-direction: column`. */
+.modal-card.cw-card {
+  max-width: 980px;
+  max-height: 90vh;
+  border: none;
+  box-shadow: 0 24px 56px -16px rgba(10, 14, 28, 0.34);
+  overflow: hidden;
+}
+.modal-band.cw-band,
+.modal-foot.cw-foot {
+  flex: 0 0 auto;
+}
+
+/* ─── Custom header band: slate ground, step rail centered ────────────────── */
+/* Smoke fix 2026-06-02 §1.6: rail now absolutely positioned at modal center.
+   Prior grid `auto 1fr auto` centered the rail within the middle column, but
+   asymmetric left/right child widths shifted that center off the modal center.
+   Absolute + translateX(-50%) anchors the rail to the band's geometric center
+   regardless of band-left text width or close-button width. */
+.modal-band.cw-band {
+  padding: 13px 26px;
+  background: var(--paper-board);
+  border-bottom: 1px solid var(--line-board);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  position: relative;
+}
+.cw-band-l {
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 10px;
+  flex: 0 0 auto;
+}
+.cw-band-l::before {
+  content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+}
+.cw-band-close {
+  background: transparent; border: 0; padding: 4px 8px;
+  font-size: 16px; color: var(--ink-3); cursor: pointer;
+  line-height: 1;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+.cw-band-close:hover { color: var(--ink); }
+
+/* ─── Step rail (header center, modal-anchored): 3 steps + hairline seps ──── */
+.cw-rail {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex; align-items: center; gap: 14px;
+  /* Sit above flex siblings; pointer-events default so step clicks land. */
+  z-index: 1;
+}
+.cw-rail-step {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: transparent; border: 0; padding: 0;
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-4);
+  cursor: pointer;
+}
+.cw-rail-step .cw-rail-chip {
+  width: 19px; height: 19px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 9px; font-weight: 500;
+  border: 1px solid var(--line-2); color: var(--ink-4);
+  background: var(--paper);
+  /* Smoke fix 2026-06-02 §1.12.2: nudge the numeral 1px right of the geometric
+     center; mono numerals at 9px optically lean left otherwise. */
+  text-indent: 1px;
+}
+.cw-rail-step.is-active { color: var(--ink); }
+.cw-rail-step.is-active .cw-rail-chip {
+  background: var(--ink); color: var(--paper); border-color: var(--ink);
+}
+.cw-rail-step.is-done { color: var(--ink-3); }
+.cw-rail-step.is-done .cw-rail-chip {
+  background: var(--paper); color: var(--pick); border-color: var(--pick);
+  /* Smoke fix 2026-06-02 §1.12.1: the ✓ checkmark needs +15% size vs the
+     numeric chip for visual parity (the ✓ glyph's x-height runs smaller). */
+  font-size: 10.5px;
+  /* Reset text-indent — the ✓ glyph centers cleanly without the numeral nudge. */
+  text-indent: 0;
+}
+.cw-rail-sep {
+  width: 26px; height: 1px; background: var(--line-2);
+}
+
+/* ─── Footer: Cancel left + step-help, Back/Next right ────────────────────── */
+.modal-foot.cw-foot {
+  padding: 14px 26px;
+  border-top: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.cw-foot-l { display: inline-flex; align-items: center; gap: 14px; }
+.cw-cancel {
+  background: transparent; border: 0; padding: 0;
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-4);
+  cursor: pointer;
+}
+.cw-cancel:hover { color: var(--ink-2); }
+.cw-step-help {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+.cw-foot-r { display: inline-flex; align-items: center; gap: 10px; }
+
+/* ─── Body wrapper: scrolls within the wizard shell ───────────────────────── */
+.cw-body {
+  padding: 0;
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  /* min-height: 0 lets the flex child actually shrink inside the column shell
+     so the body's overflow-y kicks in instead of pushing the footer off-screen. */
+  min-height: 0;
+}
+
+/* ─── Step 1: Summary banner + two-column Review ──────────────────────────── */
+/* Smoke fix 2026-06-02 §1 — summary text and chips on separate rows; chips
+   left-aligned below the text rather than right-aligned at the far edge. */
+.cw-summary {
+  padding: 18px 26px;
+  background: var(--paper-board);
+  border-bottom: 1px solid var(--line-board);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
+}
+.cw-summary-text {
+  font-family: var(--body); font-size: 14px; color: var(--ink-2);
+  line-height: 1.5; margin: 0;
+}
+.cw-summary-text b { color: var(--ink); font-weight: 600; }
+.cw-summary-chips {
+  display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.cw-chip {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+  background: var(--paper); padding: 4px 8px; border-radius: 4px;
+  border: 1px solid var(--line-2);
+}
+.cw-chip.is-pick { color: var(--pick); border-color: var(--pick); }
+
+/* Smoke fix 2026-06-02 §1.8 — row-paired layout, replaces per-column stacks.
+   Each "section" (head, Display name, Channels, Brands, Pitches) is its own
+   2-cell row; both cells share the row's height via CSS grid. Section
+   borderlines come from each row's border-top. Matches the Stress-Test canon
+   "Stepped wizard · 2-col review · dedicated resolve · full preview".
+   Smoke fix 2026-06-02 §1.10/§1.11/§1.14 — column POSITIONS are stable
+   (inputs.survivor always on the left, inputs.loser always on the right).
+   The keeper marker (`.is-keep-l` / `.is-keep-r` on each row) controls which
+   side gets the accent ring + tinted bg + filled radio + hidden foldlabel —
+   prior version swapped the column contents on keeper-flip. */
+.cw-review {
+  position: relative;
+  border-bottom: 1px solid var(--line);
+}
+
+.cw-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--line);
+  background: var(--paper);
+}
+.cw-row:first-of-type { border-top: 0; }
+.cw-row > * { min-width: 0; }
+/* Vertical hairline between the two cells of every row. */
+.cw-row > *:first-child { border-right: 1px solid var(--line); }
+
+/* Keeper-side accent — a single 2px LEFT line spanning the entire .cw-review.
+   Smoke fix 2026-06-02 §1 — prior per-row `inset 2px 0 0` got chopped by each
+   row's `border-top` hairline. Rendering once on the review container via a
+   pseudo-element draws an unbroken run; the row hairlines pass behind it.
+   `.cw-review` is already `position: relative` (the .cw-merge badge needs it),
+   so positioned children/pseudos anchor cleanly. */
+.cw-review.is-keep-l::before,
+.cw-review.is-keep-r::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 2px;
+  background: var(--pick);
+  z-index: 3;
+  pointer-events: none;
+}
+.cw-review.is-keep-l::before { left: 0; }
+.cw-review.is-keep-r::after  { left: 50%; }
+
+/* Smoke fix 2026-06-02 §1 — keeper's head row gets a subtle pick-tinted wash
+   (matches canon `.cw-col.is-keep .cw-col-head` 6% color-mix). The other four
+   rows stay clean `var(--paper)` per the "no gradient" direction. Hover (set
+   on `.cw-col-head:hover` below) deepens to 8% on the keeper head. */
+.cw-row.cw-row-head.is-keep-l > .cw-col-head:first-child,
+.cw-row.cw-row-head.is-keep-r > .cw-col-head:last-child {
+  background: color-mix(in oklab, var(--pick) 6%, var(--paper));
+}
+
+/* ─── Column head cell (row 1) ────────────────────────────────────────────── */
+/* Smoke fix 2026-06-02 §1 — canon shape (Stress-Test lines 412-504):
+   col-head is a VERTICAL stack of three rows:
+     row 1: .cw-col-id          — horizontal pair (avatar + name/slug stack)
+     row 2: .cw-col-pick        — pill on its own line ("Keep" / "Pick to keep")
+     row 3: .cw-col-foldlabel   — "Folds into the keeper" (non-keeper only)
+   Prior horizontal-wrapping layout put the pill inline with the avatar+name,
+   which didn't match canon. Hover state: subtle paper-2 wash signals
+   clickability; keeper head deepens with a pick-tinted wash. */
+.cw-col-head {
+  display: flex; flex-direction: column;
+  align-items: flex-start; gap: 12px;
+  padding: 22px 22px 20px;
+  background: transparent; border: 0;
+  cursor: pointer;
+  width: 100%; text-align: left;
+  transition: background 0.12s ease;
+}
+.cw-col-head:hover { background: var(--paper-2); }
+.cw-row.is-keep-l > .cw-col-head:first-child:hover,
+.cw-row.is-keep-r > .cw-col-head:last-child:hover {
+  background: color-mix(in oklab, var(--pick) 8%, var(--paper));
+}
+
+/* Row 1: avatar + name/slug pair */
+.cw-col-id {
+  display: flex; flex-direction: row;
+  align-items: center; gap: 12px;
+  width: 100%;
+}
+.cw-col-avatar {
+  width: 44px; height: 44px; border-radius: 5px;
+  background: var(--paper-2); color: var(--ink-3);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--body); font-size: 18px; font-weight: 700;
+  flex: 0 0 auto;
+}
+.cw-row.is-keep-l > .cw-col-head:first-child .cw-col-avatar,
+.cw-row.is-keep-r > .cw-col-head:last-child  .cw-col-avatar {
+  background: var(--ink); color: var(--paper);
+}
+.cw-col-id-body {
+  display: flex; flex-direction: column; gap: 2px;
+  flex: 1 1 auto; min-width: 0;
+}
+.cw-col-name {
+  font-family: var(--body); font-size: 18px; font-weight: 600;
+  color: var(--ink); line-height: 1.2;
+}
+.cw-col-slug {
+  font-family: var(--mono); font-size: 10px; color: var(--ink-4);
+  letter-spacing: 0.08em;
+}
+
+/* Row 2: pick pill on its own line; width fits content */
+.cw-col-pick {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+  padding: 6px 13px 6px 11px; border: 1px solid var(--line-2); border-radius: 999px;
+  background: var(--paper);
+  width: max-content;
+}
+.cw-row.is-keep-l > .cw-col-head:first-child .cw-col-pick,
+.cw-row.is-keep-r > .cw-col-head:last-child  .cw-col-pick {
+  color: var(--pick); border-color: var(--pick);
+  background: color-mix(in oklab, var(--pick) 8%, var(--paper));
+}
+.cw-pick-radio {
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 1px solid var(--ink-3);
+  display: inline-grid; place-items: center;
+  flex: 0 0 auto;
+}
+.cw-row.is-keep-l > .cw-col-head:first-child .cw-pick-radio,
+.cw-row.is-keep-r > .cw-col-head:last-child  .cw-pick-radio {
+  border-color: var(--pick);
+}
+.cw-row.is-keep-l > .cw-col-head:first-child .cw-pick-radio::after,
+.cw-row.is-keep-r > .cw-col-head:last-child  .cw-pick-radio::after {
+  content: "";
+  width: 7px; height: 7px; border-radius: 50%; background: var(--pick);
+}
+
+/* Row 3: "↘ Folds into the keeper" — hidden by default; shown on non-keeper.
+   ↘ glyph rendered via ::before per canon. */
+.cw-col-foldlabel {
+  display: none;
+  align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-4);
+}
+.cw-col-foldlabel::before {
+  content: "↘"; color: var(--ink-3);
+}
+.cw-row.is-keep-r > .cw-col-head:first-child .cw-col-foldlabel,
+.cw-row.is-keep-l > .cw-col-head:last-child  .cw-col-foldlabel {
+  display: inline-flex;
+}
+
+/* ─── Field cells (rows 2–5) ──────────────────────────────────────────────── */
+.cw-field {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 16px 22px;
+}
+.cw-field-l {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.cw-field-l-tag {
+  font-family: var(--mono); font-size: 9px; font-weight: 500;
+  letter-spacing: 0.10em; color: var(--ink-4);
+  text-transform: uppercase;
+  padding: 1px 6px; border-radius: 3px;
+  background: var(--paper-board);
+}
+.cw-field-v {
+  font-family: var(--body); font-size: 14px; color: var(--ink);
+  line-height: 1.45;
+}
+.cw-field-list {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 4px;
+  font-family: var(--body); font-size: 13px; color: var(--ink-2);
+}
+.cw-field-list li {
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* Step-1 pitch preview rows — canon `.cw-pitchrow` shape lifted from the
+   Stress-Test inline CSS. Cap-3 newest + "+N more" rollup; bounds modal
+   height for contacts with large pitch histories (clean-up merges may
+   touch contacts with 100+ pitches per Founder direction 2026-06-02). */
+.cw-pitchlist { display: flex; flex-direction: column; }
+.cw-pitchrow {
+  display: grid;
+  grid-template-columns: 54px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 7px 0;
+  border-top: 1px dashed var(--line);
+}
+.cw-pitchrow:first-of-type { border-top: none; padding-top: 4px; }
+.cw-pitchrow-d {
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-4);
+}
+.cw-pitchrow-s {
+  font-size: 12.5px; color: var(--ink-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0;
+}
+.cw-pitchrow-s b { color: var(--ink); font-weight: 600; }
+.cw-pitchrow-a {
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  color: var(--ink); text-align: right;
+}
+.cw-pitchrow-a.is-muted { color: var(--ink-4); font-weight: 400; }
+.cw-pitchrow-more {
+  margin-top: 6px;
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-4);
+}
+
+/* Merge-direction badge centered on the column divider.
+   z-index must sit above the keep-side accent pseudo (z-index 3) since the
+   badge overlaps the center line when right column is keeper. */
+.cw-merge {
+  position: absolute; top: 90px; left: 50%;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--pick); color: var(--paper);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 16px;
+  transform: translateX(-50%);
+  box-shadow: 0 2px 10px rgba(42, 111, 219, 0.35);
+  transition: transform 0.18s ease;
+  z-index: 5;
+}
+.cw-merge[data-direction="left"] { transform: translateX(-50%) scaleX(-1); }
+
+/* ─── Step 2: Resolve — per-conflict choosers + carry-over panel ──────────── */
+.cw-resolve {
+  padding: 24px 26px;
+  display: flex; flex-direction: column; gap: 20px;
+  background: var(--paper);
+}
+.cw-resolve-h {
+  font-family: var(--display); font-weight: 400;
+  font-size: clamp(28px, 4vw, 34px);
+  line-height: 0.95; letter-spacing: 0.005em;
+  text-transform: uppercase; color: var(--ink); margin: 0;
+}
+.cw-resolve-h .dot { color: var(--accent); }
+.cw-resolve-sub {
+  font-family: var(--body); font-size: 14px; line-height: 1.5; color: var(--ink-2);
+  margin: 0;
+}
+.cw-resolve-sub b { color: var(--ink); font-weight: 600; }
+
+.cw-conflict {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 24px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.cw-conflict:first-of-type { border-top: 0; padding-top: 4px; }
+.cw-conflict-l {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.cw-conflict-title {
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2);
+}
+.cw-conflict-why {
+  font-family: var(--body); font-size: 12.5px; color: var(--ink-4);
+  line-height: 1.45;
+}
+.cw-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr; gap: 12px;
+}
+.cw-choice {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px;
+  background: var(--paper); border: 1px solid var(--line-2); border-radius: 5px;
+  cursor: pointer;
+  text-align: left;
+}
+.cw-choice.is-selected {
+  border-color: var(--pick);
+  background: rgba(42, 111, 219, 0.06);
+  box-shadow: inset 0 0 0 1px var(--pick);
+}
+.cw-choice-marker {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 1.5px solid var(--ink-3);
+  flex: 0 0 auto; margin-top: 2px;
+}
+.cw-choice.is-selected .cw-choice-marker {
+  border-color: var(--pick); background: var(--pick);
+  box-shadow: inset 0 0 0 2.5px var(--paper);
+}
+.cw-choice-text { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; }
+.cw-choice-who {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-4);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.cw-choice-who-preset {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.10em;
+  color: var(--pick); text-transform: uppercase;
+}
+.cw-choice-v {
+  font-family: var(--body); font-size: 14px; color: var(--ink); line-height: 1.35;
+}
+.cw-choice-v.is-mono { font-family: var(--mono); font-size: 13px; }
+
+.cw-carry {
+  margin-top: 4px;
+  padding: 14px 16px;
+  background: var(--paper-board);
+  border: 1px solid var(--line-board); border-radius: 5px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.cw-carry-h {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+}
+.cw-carry-list {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.cw-carry-list li {
+  font-family: var(--body); font-size: 13px; color: var(--ink-2);
+  line-height: 1.4;
+  display: flex; align-items: center; gap: 8px;
+}
+.cw-carry-list li::before {
+  content: "→"; color: var(--ink-4); font-family: var(--mono); font-size: 11px;
+  flex: 0 0 auto;
+}
+
+/* ─── Step 3: Preview — full-replacement result card + confirm bar ────────── */
+.cw-preview {
+  padding: 0;
+  display: flex; flex-direction: column;
+  background: var(--paper);
+}
+/* Smoke fix 2026-06-02 §3 — `display: flex` (block-level) instead of
+   inline-flex so the banner spans the full modal-body width. Prior
+   inline-flex shrunk to text width. */
+.cw-preview-banner {
+  padding: 12px 26px;
+  background: rgba(42, 111, 219, 0.05);
+  border-bottom: 1px solid rgba(42, 111, 219, 0.18);
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--pick);
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+}
+.cw-preview-banner::before {
+  content: "✦"; font-size: 12px;
+}
+.cw-result {
+  padding: 24px 26px;
+  display: flex; flex-direction: column; gap: 22px;
+}
+/* Smoke fix 2026-06-02 §3 — no border-bottom under the result head; mirrors
+   the contact detail page convention (`/app/people/<slug>` page head). The
+   page's vertical rhythm is carried by section gaps in `.cw-result` itself. */
+.cw-result-head {
+  display: flex; align-items: center; gap: 18px;
+}
+.cw-result-avatar {
+  width: 80px; height: 80px; border-radius: 6px;
+  background: var(--ink); color: var(--paper);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--body); font-size: 32px; font-weight: 700;
+  flex: 0 0 auto;
+}
+.cw-result-id { display: flex; flex-direction: column; gap: 4px; }
+.cw-result-h1 {
+  font-family: var(--display); font-weight: 400;
+  font-size: clamp(40px, 6vw, 64px);
+  line-height: 0.9; letter-spacing: 0.005em;
+  text-transform: uppercase; color: var(--ink); margin: 0;
+}
+/* Canon multi-span meta line (Stress-Test 243-245): slug + counts as separate
+   spans; CSS pseudo-element renders the `·` between them. Flex-wrap allows
+   the row to break naturally on narrow widths. */
+.cw-result-meta {
+  display: flex; flex-wrap: wrap;
+  gap: 4px 16px;
+  font-family: var(--mono); font-size: 10.5px; font-weight: 500;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3);
+}
+.cw-result-meta span {
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.cw-result-meta span + span::before {
+  content: "·"; color: var(--ink-4); margin-right: 12px;
+}
+
+.cw-result-block { display: flex; flex-direction: column; gap: 10px; }
+.cw-result-block-h {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+/* Canon `.cw-result-block-h::before` accent dot per Stress-Test line 248 —
+   5px filled accent circle leading each section kicker (Channels / Brands /
+   Pitch history). Smoke fix 2026-06-02 §3. */
+.cw-result-block-h::before {
+  content: "";
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent);
+  flex: 0 0 auto;
+}
+.cw-result-block-h-tag {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.10em;
+  color: var(--pick); text-transform: uppercase;
+}
+
+.cw-channels {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.cw-channel {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 10px;
+  background: var(--paper); border: 1px solid var(--line-2); border-radius: 999px;
+  font-family: var(--body); font-size: 13px; color: var(--ink-2);
+}
+.cw-channel-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  flex: 0 0 auto;
+}
+.cw-channel-primary {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--pick);
+  padding: 1px 6px; border-radius: 3px;
+  background: rgba(42, 111, 219, 0.10);
+}
+
+.cw-brand-cards {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.cw-brand-card {
+  padding: 14px 16px;
+  background: var(--paper); border: 1px solid var(--line-2); border-radius: 5px;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+}
+.cw-brand-card.is-pick { border-color: var(--pick); }
+.cw-brand-card-l { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; }
+.cw-brand-card-name {
+  font-family: var(--body); font-size: 15px; font-weight: 600; color: var(--ink);
+}
+.cw-brand-card-meta {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.10em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+.cw-brand-card-r {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.10em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+
+.cw-history {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--line-2); border-radius: 5px;
+  overflow: hidden;
+}
+/* Smoke fix 2026-06-02 §3 — canon 4-column row per Stress-Test line 266:
+   date · brand+summary+from-tag · stage chip · amount. Prior 3-col layout
+   used the last column for a debug pitch_id slice. Mobile collapses to a
+   2-col stack (date + body), drops chip + amount inline. */
+.cw-history-row {
+  display: grid;
+  grid-template-columns: 64px 1fr 110px auto;
+  gap: 14px; align-items: center;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  font-family: var(--body); font-size: 13px; color: var(--ink-2);
+}
+.cw-history-row:first-child { border-top: 0; }
+.cw-history-row.is-from-loser {
+  background: color-mix(in oklab, var(--pick) 5%, var(--paper));
+}
+.cw-history-date {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+/* Smoke fix 2026-06-02 §3 — body cell is a flex pair: text (truncates with
+   ellipsis on overflow) + from-tag (never truncates). Prior shape put the
+   tag inside the text span, so a long summary clipped the tag along with
+   the title. Splitting them keeps the tag fully visible regardless of
+   summary length. */
+.cw-history-s {
+  display: flex; align-items: center; gap: 8px;
+  min-width: 0;
+  font-size: 13px; color: var(--ink-2);
+}
+.cw-history-s-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cw-history-s b { color: var(--ink); font-weight: 600; }
+.cw-history-stage { display: inline-flex; align-items: center; }
+.cw-history-nodeal {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.10em;
+  text-transform: uppercase; color: var(--ink-4);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 3px 8px;
+}
+.cw-history-a {
+  font-family: var(--mono); font-size: 11.5px; font-weight: 500;
+  color: var(--ink); text-align: right;
+}
+.cw-history-a.is-muted { color: var(--ink-4); font-weight: 400; }
+/* Shared "from <loser-name>" pill — used in pitch-history rows (`.cw-history-s`
+   flex pair) AND in brand-card meta. Same visual language: blue-border + blue
+   mono text. `flex: 0 0 auto` guards the pill from being truncated when it
+   lives inside a flex parent with ellipsis-overflowing siblings. */
+.cw-from-tag {
+  flex: 0 0 auto;
+  display: inline-block;
+  font-family: var(--mono); font-size: 8.5px; font-weight: 500;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--pick);
+  border: 1px solid var(--pick); border-radius: 3px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.cw-history-more {
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-4);
+}
+.cw-brand-cards-more {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-4);
+  padding: 4px 0;
+}
+.cw-field-list-more {
+  color: var(--ink-4); font-style: italic;
+}
+
+.cw-confirm {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  padding: 18px 26px;
+  background: var(--paper-board);
+  border-top: 1px solid var(--line-board);
+}
+.cw-confirm-text { display: flex; flex-direction: column; gap: 4px; }
+.cw-confirm-dest {
+  font-family: var(--body); font-size: 15px; color: var(--ink); font-weight: 600;
+}
+.cw-confirm-dest b { color: var(--ink); }
+/* Smoke fix 2026-06-02 §3 — destination contact name highlighted in accent
+   to make the irreversible target unmistakable in the final confirm line. */
+.cw-confirm-name {
+  color: var(--accent);
+  font-weight: 600;
+}
+/* "· keeps /<slug>" — secondary line in the confirm-dest, communicates which
+   URL survives the merge (the loser's slug becomes a 301 alias). Slug renders
+   in mono to read as a path identifier. */
+.cw-confirm-keeps {
+  color: var(--ink-3); font-weight: 500;
+}
+.cw-confirm-slug {
+  font-family: var(--mono); font-size: 12.5px; color: var(--ink-3);
+  letter-spacing: 0.02em;
+}
+.cw-confirm-dest .cw-slug {
+  font-family: var(--mono); font-size: 12px; color: var(--ink-3);
+}
+.cw-confirm-undo {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+.cw-confirm-err {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.10em;
+  text-transform: uppercase; color: var(--accent);
+  margin-top: 6px;
+}
+
+/* ─── Step 4: Done success state ──────────────────────────────────────────── */
+.cw-done {
+  padding: 56px 26px 48px;
+  display: flex; flex-direction: column; align-items: center; gap: 18px;
+  text-align: center;
+}
+.cw-done-stamp {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.18em; text-transform: uppercase; color: var(--pick);
+  padding: 5px 12px; border-radius: 999px;
+  background: rgba(42, 111, 219, 0.10);
+}
+.cw-done-h1 {
+  font-family: var(--display); font-weight: 400;
+  font-size: clamp(40px, 6vw, 64px);
+  line-height: 0.95; letter-spacing: 0.005em;
+  text-transform: uppercase; color: var(--ink); margin: 0;
+}
+.cw-done-body {
+  font-family: var(--body); font-size: 14px; color: var(--ink-2); line-height: 1.55;
+  max-width: 560px;
+}
+.cw-done-body b { color: var(--ink); font-weight: 600; }
+
+/* ─── Step transitions — design canon cwIn animation ──────────────────────── */
+.cw-step {
+  display: block;
+  animation: cwIn 0.22s ease-out both;
+}
+@keyframes cwIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Overlay + card entry / exit (smoke fix 2026-06-02 §1 close animation) ─
+   Overlay re-uses the existing `pitch-modal-overlay-fade-in` for entry; the
+   exit is the reverse keyframe. The card itself gets a translateY + fade for
+   both directions. JSX adds `.is-closing` to the overlay + delays unmount by
+   180ms (matches keyframe duration) so React stays mounted long enough for
+   the animation to run. */
+.modal-card.cw-card {
+  animation: cwCardIn 0.22s ease-out both;
+}
+.pitch-modal-overlay.cw-overlay.is-closing {
+  animation: pitch-modal-overlay-fade-out 180ms ease-in forwards;
+}
+.pitch-modal-overlay.cw-overlay.is-closing .modal-card.cw-card {
+  animation: cwCardOut 180ms ease-in forwards;
+}
+@keyframes pitch-modal-overlay-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes cwCardIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes cwCardOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(8px); }
+}
+
+/* ─── Responsive: @container app ≤760px ─── canon mobile layout per
+   2026-06-03 design handoff. Two stacked contact cards (keeper-stack on top
+   → 10px slate band → duplicate-stack), 3px accent stripe at the top of the
+   keeper, pinned footer with internal step-body scroll, Cancel only on
+   Step 1. Achieved without JSX restructure by promoting `.cw-row` to
+   `display: contents` so each row's two cells become direct children of
+   the `.cw-review` grid; CSS `order` then interleaves them across rows. */
+@container app (max-width: 760px) {
+  /* Mobile feedback round 2026-06-03 #1 — shell breathes a hair off the
+     viewport (4% gutter) and uses near-full height to give the wizard
+     vertical room. */
+  .modal-card.cw-card { max-width: 96%; max-height: 98vh; }
+  /* Mobile feedback round 2026-06-03 #1 — band becomes a 2-row grid: title +
+     close on row 1, step rail on row 2 (full-width, centered). Desktop keeps
+     its flex+absolute-rail layout untouched. */
+  .modal-band.cw-band {
+    padding: 11px 16px;
+    gap: 8px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "l close"
+      "rail rail";
+    align-items: center;
+  }
+  .cw-band-l { grid-area: l; }
+  .cw-band-close { grid-area: close; margin-left: 0; }
+  .cw-rail {
+    grid-area: rail;
+    position: static; transform: none; left: auto; top: auto;
+    gap: 8px;
+    /* Mobile feedback round 2026-06-03 #2 — left-align the step counter under
+       the title (was centered). */
+    justify-self: start;
+  }
+  .cw-rail-sep { width: 14px; }
+  .cw-summary { padding: 14px 16px; flex-direction: column; align-items: flex-start; gap: 10px; }
+
+  /* Step 1 Review — two-stack layout via grid order across rows. */
+  .cw-review {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  /* Disable the desktop keeper-side accent pseudo on mobile — it's a vertical
+     line on `.cw-review` positioned for the 2-column desktop layout and reads
+     wrong on the 1-column stack. Mobile uses a horizontal 3px top stripe on
+     the keeper head instead (per canon). */
+  .cw-review.is-keep-l::before,
+  .cw-review.is-keep-r::after {
+    display: none;
+  }
+  .cw-review .cw-row { display: contents; }
+  /* Mobile feedback round 2026-06-03 #2 — cell positions are STABLE across
+     keeper-flips. `inputs.survivor` (first-child of each row) always stacks
+     on top; `inputs.loser` (last-child) always stacks below. The keeper
+     marker (stripe + tint) moves; the contact data does NOT change position.
+     Mirrors the desktop column-stability rule from the §1.10/§1.11/§1.14
+     smoke fix earlier in the session. */
+  .cw-row > *:first-child { order: var(--cw-row-i, 0); }
+  .cw-row > *:last-child { order: calc(100 + var(--cw-row-i, 0)); }
+  /* Divider between sections — bottom hairline on each cell (replaces the
+     desktop row border-top which only worked when rows were sequential). */
+  .cw-row > * {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  /* 10px slate band between the two contact stacks — position-based now:
+     always on the BOTTOM cell of the head row (which is always
+     `inputs.loser`'s head since positions are stable). */
+  .cw-row.cw-row-head > *:last-child {
+    border-top: 10px solid var(--paper-board);
+  }
+  /* Mobile feedback round 2026-06-03 #3 — 3px accent stripe on the keeper's
+     head cell. Moves with the keeper marker; visible regardless of which
+     side is the survivor. `appearance: none` + `border-radius: 0` on the
+     head button ensure the inset shadow paints clean (no UA bevel / rounded
+     corner clipping the strip). */
+  .cw-col-head {
+    appearance: none;
+    -webkit-appearance: none;
+    border-radius: 0;
+    padding: 18px 16px;
+  }
+  .cw-row.cw-row-head.is-keep-l > *:first-child,
+  .cw-row.cw-row-head.is-keep-r > *:last-child {
+    box-shadow: inset 0 3px 0 var(--pick);
+  }
+  .cw-field { padding: 14px 16px; }
+  .cw-merge { display: none; }
+
+  .cw-resolve { padding: 20px 16px; }
+  .cw-conflict { grid-template-columns: 1fr; gap: 12px; }
+  .cw-choices { grid-template-columns: 1fr; }
+  .cw-result { padding: 20px 16px; }
+  /* Mobile feedback round 2026-06-03 #4 — `.cw-result-head` stacks vertically:
+     avatar on top, `.cw-result-id` (name + meta) on a new line below. Desktop
+     keeps `display: flex; align-items: center; gap: 18px` row layout. */
+  .cw-result-head { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .cw-result-h1 { font-size: clamp(32px, 8vw, 44px); }
+  /* Mobile: collapse 4-col history row to date + body; hide stage chip + amount
+     (they're the lower-signal columns at narrow widths per canon line 329-330). */
+  .cw-history-row { grid-template-columns: 54px 1fr; gap: 10px; }
+  .cw-history-stage { display: none; }
+  .cw-history-a { display: none; }
+  .cw-confirm { padding: 14px 16px; flex-direction: column; align-items: stretch; gap: 12px; }
+
+  /* Pinned footer: shadow at the top edge per canon, single nowrap row, no
+     step-help, Cancel hidden on steps 2-3 (data-step attr set by JSX). */
+  .cw-foot {
+    padding: 12px 16px;
+    flex-wrap: nowrap;
+    gap: 10px;
+    box-shadow: 0 -6px 16px -10px rgba(10, 14, 28, 0.3);
+  }
+  .cw-step-help { display: none; }
+  .cw-foot[data-step="2"] .cw-cancel,
+  .cw-foot[data-step="3"] .cw-cancel { display: none; }
+  /* Mobile feedback round 2026-06-03 #3 — when Cancel is hidden (steps 2-3),
+     drop the entire `.cw-foot-l` container so it doesn't reserve empty space
+     on the left of the footer. Step-help is also hidden on mobile, so on
+     steps 2-3 cw-foot-l carries no visible children anyway. */
+  .cw-foot[data-step="2"] .cw-foot-l,
+  .cw-foot[data-step="3"] .cw-foot-l { display: none; }
+  /* Back stays in cw-foot-r but pushed to the LEFT of that group so the
+     layout reads `[Cancel | empty | empty | Back ... Next]` on step 1 and
+     `[empty | Back ... Next]` on steps 2-3 — Back/Next stay right-grouped. */
+  .cw-foot-r { flex: 1 1 auto; justify-content: flex-end; }
+  .cw-foot-r > .btn-ghost { margin-right: auto; }
 }
