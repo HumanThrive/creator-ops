@@ -27,7 +27,8 @@ import type {
   ContactBrand,
   ContactRole,
 } from '@/lib/types/contact'
-import type { Pitch } from '@/lib/types/pitch'
+import type { Pitch, PitchDirection } from '@/lib/types/pitch'
+import type { DealStage } from '@/lib/types/deal'
 
 // ============================================================================
 // INPUT TYPES
@@ -37,8 +38,15 @@ import type { Pitch } from '@/lib/types/pitch'
 // which contact it pre-merge belongs to. AC-M1 same-pitch dedup case
 // (a pitch linked to BOTH contacts via the contact_pitches pivot) is
 // represented as `source: 'both'` and renders once in the unified history.
+// Deal fields embed-extracted by the loader (1-to-1 v1 UX); null when the
+// pitch has no deal row (e.g., auto-create skip-list excludes inbound
+// spam / not_a_pitch). Per Founder direction 2026-06-02 Step-3 history rows
+// render stage chip + current amount per canon.
 export interface PitchWithProvenance extends Pitch {
   source: 'survivor' | 'loser' | 'both'
+  deal_stage: DealStage | null
+  deal_current_amount: number | null
+  deal_current_currency: string | null
 }
 
 // All inputs the module needs. The page-level loader fetches these fresh at
@@ -125,11 +133,21 @@ export interface PitchHistoryItem {
   pitch_id: string
   brand_id: string | null
   brand_name: string | null
+  // Brief pitch summary for the row's middle column (canon row format:
+  // `<date> <brand> · <summary> <stage> <amount>`). Falls back to empty
+  // when AI summary unavailable.
+  summary: string
   created_at: string
   // "from <dup>" tag — true when this pitch was linked ONLY to the loser
   // pre-merge. Same-pitch dedup (AC-M1, source='both') renders without
   // the tag — neither side gets "from <dup>" credit for a shared pitch.
   from_loser: boolean
+  // Deal state — drives the stage chip + current amount columns per canon
+  // (Stress-Test line 624–628). Null when the pitch has no deal row.
+  direction: PitchDirection
+  stage: DealStage | null
+  current_amount: number | null
+  current_currency: string | null
 }
 
 export interface SurvivorPreview {
@@ -283,12 +301,22 @@ function mergeChannels(
   inputs: MergeInputs,
   resolutions: MergeResolutions,
 ): ChannelEntry[] {
+  // Per Founder direction 2026-06-02 (§1.16 smoke iteration): when a Primary
+  // conflict exists, the NON-PICKED Primary is DISCARDED from the merged
+  // union — not auto-carried as a Secondary. Symmetric: applies whether the
+  // picked Primary is the keeper's or the loser's (whichever wasn't chosen
+  // gets dropped). Loser's OTHER non-Primary channels carry over normally.
+  // Matches the DupEmailCallout editing-intent: the user was editing AWAY
+  // from that Primary value, so importing it as Secondary contradicts intent.
+  const discardKey = computePrimaryDiscardKey(inputs, resolutions)
+
   // Union + dedup identical (kind, identifier) pairs.
   const seen = new Set<string>()
   const merged: ChannelEntry[] = []
   for (const ch of [...inputs.survivor.channels, ...inputs.loser.channels]) {
     const key = channelKey(ch)
     if (seen.has(key)) continue
+    if (key === discardKey) continue
     seen.add(key)
     // Reset Primary; we'll set exactly one below per resolutions.
     merged.push({ ...ch, primary: false })
@@ -308,6 +336,32 @@ function mergeChannels(
   }
 
   return merged
+}
+
+// Identify the (kind, identifier) key of the Primary channel that is being
+// discarded from the merge. Returns null when no Primary conflict exists
+// (one or both sides lack a Primary, or both Primaries point at the same
+// value). Exported so the wizard's Step-2 carry-over panel can also filter
+// the discarded channel from its "carries over automatically" list — the
+// visible carry-over set must match the actual committed merged channels.
+export function computePrimaryDiscardKey(
+  inputs: MergeInputs,
+  resolutions: MergeResolutions,
+): string | null {
+  const sPrimary = inputs.survivor.channels.find((c) => c.primary)
+  const lPrimary = inputs.loser.channels.find((c) => c.primary)
+  if (!sPrimary || !lPrimary) return null
+  const sKey = keyString({ kind: sPrimary.kind, identifier: sPrimary.identifier })
+  const lKey = keyString({ kind: lPrimary.kind, identifier: lPrimary.identifier })
+  if (sKey === lKey) return null
+  const pickedKey = resolutions.primary_channel
+    ? keyString(resolutions.primary_channel)
+    : sKey
+  if (pickedKey === sKey) return lKey
+  if (pickedKey === lKey) return sKey
+  // User picked neither (shouldn't happen given the chooser only surfaces the
+  // two Primary values, but if it does — keep both, discard nothing).
+  return null
 }
 
 function channelKey(ch: ChannelEntry): string {
@@ -442,10 +496,15 @@ function buildPitchHistory(inputs: MergeInputs): PitchHistoryItem[] {
       pitch_id: p.id,
       brand_id: p.brand_id,
       brand_name: p.brand_id ? brand_lookup.get(p.brand_id)?.name ?? null : null,
+      summary: p.ai_summary?.trim() ?? '',
       created_at: p.created_at,
       // Shared pitches (source='both', AC-M1 dedup) don't get the
       // "from <dup>" tag — they belonged to both pre-merge.
       from_loser: p.source === 'loser',
+      direction: p.direction,
+      stage: p.deal_stage,
+      current_amount: p.deal_current_amount,
+      current_currency: p.deal_current_currency,
     }))
 }
 

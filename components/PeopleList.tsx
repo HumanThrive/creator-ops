@@ -42,8 +42,23 @@ export function PeopleList({ contacts, totalCount, query, sort }: PeopleListProp
   const [localQ, setLocalQ] = useState(query)
 
   // FR-9 #84 — selection mode for proactive Combine.
+  //
+  // Smoke fix 2026-06-02 §4.2(c): selection state stores the full contact
+  // summary needed for Combine (id + display_name + pitch_count) rather than
+  // just the id. When the user types a search query after picking one row,
+  // the URL updates → server re-renders with a filtered `contacts` prop that
+  // may no longer contain the earlier-picked contact. Reading from a Map
+  // captured at selection time keeps the Combine click resilient across
+  // mid-flow query changes.
+  type SelectedContact = {
+    id: string
+    display_name: string
+    pitch_count: number
+  }
   const [selectionMode, setSelectionMode] = useState(false)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [selectedContacts, setSelectedContacts] = useState<
+    Map<string, SelectedContact>
+  >(() => new Map())
   const [combineOpen, setCombineOpen] = useState<{
     keeperId: string
     keeperName: string
@@ -55,33 +70,34 @@ export function PeopleList({ contacts, totalCount, query, sort }: PeopleListProp
   // a 3rd while 2 are already selected is a no-op (no eviction; user
   // de-selects first). Keeps the contract simple + matches the affordance
   // shape ("Combine appears when exactly 2 are selected").
-  const toggleRow = useCallback((contactId: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(contactId)) {
-        next.delete(contactId)
+  const toggleRow = useCallback((contact: ContactSummary) => {
+    setSelectedContacts((prev) => {
+      const next = new Map(prev)
+      if (next.has(contact.id)) {
+        next.delete(contact.id)
         return next
       }
       if (next.size >= 2) return prev // pairwise cap
-      next.add(contactId)
+      next.set(contact.id, {
+        id: contact.id,
+        display_name: contact.display_name,
+        pitch_count: contact.pitch_count,
+      })
       return next
     })
   }, [])
 
   const exitSelectionMode = useCallback(() => {
     setSelectionMode(false)
-    setSelectedIds(new Set())
+    setSelectedContacts(new Map())
   }, [])
 
-  // AC1.3 — default keeper = more-history (more linked pitches). Resolve
-  // both selected ContactSummary rows + pick the keeper by pitch_count;
-  // ties go to the first-selected (deterministic; user can always swap
-  // keeper inside the wizard's Review step).
+  // AC1.3 — default keeper = more-history (more linked pitches). Read from
+  // the captured selection map (NOT from the possibly-filtered contacts prop)
+  // so query-narrowed lists don't break the click handler.
   function onCombineClick() {
-    if (selectedIds.size !== 2) return
-    const picked = contacts.filter((c) => selectedIds.has(c.id))
-    if (picked.length !== 2) return
-    const [a, b] = picked
+    if (selectedContacts.size !== 2) return
+    const [a, b] = Array.from(selectedContacts.values())
     const keeper = a.pitch_count >= b.pitch_count ? a : b
     const loser = keeper.id === a.id ? b : a
     setCombineOpen({
@@ -167,19 +183,26 @@ export function PeopleList({ contacts, totalCount, query, sort }: PeopleListProp
               Z → A
             </button>
           </div>
-          <NewContactTrigger />
+          {/* Smoke fix 2026-06-02 §4.2 — hide "+ New Contact" during selection
+              mode. The mode's action set is goal-directed (pick 2 → Combine);
+              showing an unrelated affordance invites context-switch slips and
+              breaks task coherence. iOS Contacts / Gmail / Notion all hide
+              non-relevant primary actions during multi-select modes. */}
+          {!selectionMode && <NewContactTrigger />}
           {/* FR-9 #84 — Select toggle + Combine CTA. Combine is gated on
               exactly 2 selected per AC-M3 pairwise v1. */}
           {selectionMode ? (
             <>
               <button
                 type="button"
-                className="btn-pill"
+                className={`sort-btn ${
+                  selectedContacts.size === 2 ? 'is-primary' : ''
+                }`}
                 onClick={onCombineClick}
-                disabled={selectedIds.size !== 2}
+                disabled={selectedContacts.size !== 2}
                 aria-label="Combine the two selected contacts"
               >
-                Combine {selectedIds.size}/2 →
+                Combine {selectedContacts.size}/2 →
               </button>
               <button
                 type="button"
@@ -225,7 +248,7 @@ export function PeopleList({ contacts, totalCount, query, sort }: PeopleListProp
               key={c.id}
               contact={c}
               selectionMode={selectionMode}
-              isSelected={selectedIds.has(c.id)}
+              isSelected={selectedContacts.has(c.id)}
               onToggle={toggleRow}
             />
           ))}
@@ -257,7 +280,7 @@ interface ContactRowProps {
   contact: ContactSummary
   selectionMode: boolean
   isSelected: boolean
-  onToggle: (contactId: string) => void
+  onToggle: (contact: ContactSummary) => void
 }
 
 function ContactRow({ contact, selectionMode, isSelected, onToggle }: ContactRowProps) {
@@ -380,7 +403,7 @@ function ContactRow({ contact, selectionMode, isSelected, onToggle }: ContactRow
       <button
         type="button"
         className={rowClass}
-        onClick={() => onToggle(contact.id)}
+        onClick={() => onToggle(contact)}
         aria-pressed={isSelected}
         aria-label={`${isSelected ? 'Deselect' : 'Select'} ${contact.display_name}`}
       >

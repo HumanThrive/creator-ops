@@ -114,11 +114,20 @@ export function CombineLauncher(props: CombineLauncherProps) {
     [],
   )
 
-  // Post-success close: navigate to survivor's /app/people page (AC3.5) +
-  // close the launcher. Survivor's slug isn't in the wizard-side state, so
-  // we navigate by id — the [person]/page.tsx route handles uuid + slug
-  // lookups equally (per FR-8 slug-routing).
+  // Cancel-shape close: ESC / backdrop / Cancel button / ✕ — does NOT navigate.
+  // User stays on whatever surface they came from (DupEmailCallout's parent
+  // detail page, DeleteBlockedModal's contact detail page, /app/people).
+  // Smoke fix 2026-06-02 §1 "Cancel button bug" — prior version navigated to
+  // survivor on every close regardless of commit status.
   const onWizardClose = useCallback(() => {
+    onClose()
+  }, [onClose])
+
+  // Success-shape close: Step 4 Done "Open <keeper> →" only. Navigates to
+  // survivor's /app/people page (AC3.5) + refreshes. Survivor's slug isn't
+  // in the wizard-side state, so we navigate by id — the [person]/page.tsx
+  // route handles uuid + slug lookups equally (per FR-8 slug-routing).
+  const onWizardSuccessClose = useCallback(() => {
     if (phase.kind === 'ready') {
       router.push(`/app/people/${phase.inputs.survivor.id}`)
       router.refresh()
@@ -151,6 +160,7 @@ export function CombineLauncher(props: CombineLauncherProps) {
       inputs={phase.inputs}
       defaultSurvivor="survivor"
       onClose={onWizardClose}
+      onSuccessClose={onWizardSuccessClose}
       onCommit={onCommit}
     />
   )
@@ -288,7 +298,7 @@ function PickOther(p: PickOtherProps) {
           <span className="modal-foot-help">
             Pick one to continue
           </span>
-          <button type="button" className="btn-pill ghost" onClick={p.onCancel}>
+          <button type="button" className="btn-ghost" onClick={p.onCancel}>
             Cancel
           </button>
         </footer>

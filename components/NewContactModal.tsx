@@ -39,6 +39,24 @@ export function NewContactModal({ onClose, onCreated }: NewContactModalProps) {
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose, submitting])
 
+  // Auto-clear the DupEmailCallout when the user takes corrective action on
+  // the channel set — value-edit, channel-remove, kind-change, or primary-
+  // demote (Founder direction 2026-06-02 mid-smoke §2). The check matches the
+  // partial UNIQUE index's case-insensitive shape (lower(identifier)) so a
+  // re-cased re-type still clears. The callout re-surfaces only on the next
+  // submit if the dup still exists server-side.
+  useEffect(() => {
+    if (!dupEmail) return
+    const target = dupEmail.toLowerCase()
+    const stillPresent = channels.some(
+      (c) =>
+        c.kind === 'Email' &&
+        c.primary &&
+        c.identifier.trim().toLowerCase() === target,
+    )
+    if (!stillPresent) setDupEmail(null)
+  }, [channels, dupEmail])
+
   function addChannel() {
     setChannels((cs) => [
       ...cs,

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { FR9PlaceholderModal } from '@/components/FR9PlaceholderModal'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { CombineLauncher } from '@/components/CombineLauncher'
 import { findContactByPrimaryEmail } from '@/lib/load-merge-inputs'
 
@@ -11,19 +11,25 @@ import { findContactByPrimaryEmail } from '@/lib/load-merge-inputs'
 // 'primary_email_collision' (HTTP 409 on the partial UNIQUE
 // contacts_user_primary_email_uniq index).
 //
-// FR-9 #83 (2026-06-02): "Combine into the existing Contact" wires to the
-// real CombineLauncher when editingContactId is set (EDIT flow). When
-// editingContactId is undefined (CREATE flow — new contact not yet persisted,
-// no row to merge), the Combine button falls back to the FR9PlaceholderModal
-// with a "save flow doesn't support Combine" message. Save first, then merge
-// from the existing-contact's surface.
+// FR-9 #83 (2026-06-02): "Combine into the existing Contact" wires to the real
+// CombineLauncher when editingContactId is set (EDIT flow).
+//
+// Smoke iteration 2026-06-02 (Founder direction, §2.3-2.5): CREATE flow no
+// longer falls back to FR9PlaceholderModal — instead, the primary CTA becomes
+// "Open <owner-name> Contact" and routes to the email-owner's
+// /app/people/[slug-or-id] page. From there the user can run Combine via
+// the EDIT-flow surfaces if they decide that's the right move. The eager
+// owner lookup powers the button label rendering ("Open <name> Contact"
+// rather than the bare "Open Contact").
+
+type Owner = { id: string; slug: string | null; display_name: string | null }
 
 interface DupEmailCalloutProps {
   email: string
   // EDIT flow: the existing Contact being edited that hit the email collision.
   // CREATE flow (NewContactModal): undefined — the new contact doesn't exist
-  // as a row yet, so merge can't seat the loser side. Combine button shows
-  // a placeholder routing the user to fix the email separately.
+  // as a row yet, so merge can't seat the loser side. CTA navigates to the
+  // email-owner's contact page instead (per Founder direction 2026-06-02).
   editingContactId?: string
   editingContactName?: string
   onDismiss: () => void
@@ -35,33 +41,55 @@ export function DupEmailCallout({
   editingContactName,
   onDismiss,
 }: DupEmailCalloutProps) {
-  // Two modes: 'launcher' opens CombineLauncher (EDIT flow); 'placeholder' opens
-  // the FR9PlaceholderModal (CREATE flow — no editing row to seat the loser).
-  const [combineMode, setCombineMode] = useState<
-    null | { kind: 'launcher'; keeperId: string } | { kind: 'placeholder' }
-  >(null)
-  const [resolving, setResolving] = useState(false)
+  const router = useRouter()
+  const isCreateFlow = !editingContactId
 
-  async function onCombineClick() {
-    if (!editingContactId) {
-      // CREATE flow — no DB row for the "duplicate" side; surface the
-      // placeholder. The save-first guidance lives in FR9PlaceholderModal copy
-      // for now; future polish replaces with creator-native "open <owner>"
-      // routing.
-      setCombineMode({ kind: 'placeholder' })
-      return
+  // CREATE flow — eager-lookup the owner on mount so the button label can
+  // render "Open <name> Contact" on first paint. EDIT flow defers the lookup
+  // to button click (existing behavior — owner data only needed for the
+  // CombineLauncher mount payload).
+  const [owner, setOwner] = useState<Owner | null>(null)
+  const [ownerLoaded, setOwnerLoaded] = useState(false)
+
+  useEffect(() => {
+    if (!isCreateFlow) return
+    let cancelled = false
+    findContactByPrimaryEmail(email).then((result) => {
+      if (cancelled) return
+      setOwner(result)
+      setOwnerLoaded(true)
+    })
+    return () => {
+      cancelled = true
     }
-    setResolving(true)
-    const owner = await findContactByPrimaryEmail(email)
-    setResolving(false)
-    if (!owner) {
+  }, [email, isCreateFlow])
+
+  // EDIT flow — launcher mount state + click-time lookup.
+  const [launcherKeeperId, setLauncherKeeperId] = useState<string | null>(null)
+  const [resolvingEdit, setResolvingEdit] = useState(false)
+
+  async function onEditCombineClick() {
+    setResolvingEdit(true)
+    const result = await findContactByPrimaryEmail(email)
+    setResolvingEdit(false)
+    if (!result) {
       // Race condition: owner contact was deleted between the 409 and the
       // Combine click. Dismiss + let user retry the save (now unblocked).
       console.warn('DupEmailCallout: no email owner found for', email)
       onDismiss()
       return
     }
-    setCombineMode({ kind: 'launcher', keeperId: owner.id })
+    setLauncherKeeperId(result.id)
+  }
+
+  function onOpenOwnerClick() {
+    if (!owner) {
+      // Race: owner row was deleted between the 409 and the click.
+      console.warn('DupEmailCallout: owner missing at navigate time')
+      onDismiss()
+      return
+    }
+    router.push(`/app/people/${owner.slug || owner.id}`)
   }
 
   return (
@@ -85,37 +113,60 @@ export function DupEmailCallout({
           your directory. The most common cause is a misspelled name across
           two pitches — they&rsquo;re the same person, recorded twice.
         </p>
-        <div className="dup-email-callout-actions">
-          <button
-            type="button"
-            className="btn-pill"
-            onClick={onCombineClick}
-            disabled={resolving}
-          >
-            {resolving ? 'Looking up…' : 'Combine into the existing Contact'}
-          </button>
-          <button
-            type="button"
-            className="row-action-pill"
-            onClick={onDismiss}
-          >
-            Use a different email
-          </button>
-        </div>
+        {isCreateFlow ? (
+          // CREATE flow: stacked + centered. Primary CTA = "Open <name> Contact"
+          // (eager-lookup owner; navigates to /app/people/[slug-or-id]).
+          // Secondary = "Use a different email" on its own line.
+          <div className="dup-email-callout-actions is-stacked">
+            <button
+              type="button"
+              className="btn-pill"
+              onClick={onOpenOwnerClick}
+              disabled={!ownerLoaded}
+            >
+              {!ownerLoaded
+                ? 'Looking up…'
+                : `Open ${owner?.display_name ?? 'the existing'} Contact`}
+            </button>
+            <button
+              type="button"
+              className="row-action-pill"
+              onClick={onDismiss}
+            >
+              Use a different email
+            </button>
+          </div>
+        ) : (
+          // EDIT flow: inline horizontal (existing behavior).
+          <div className="dup-email-callout-actions">
+            <button
+              type="button"
+              className="btn-pill"
+              onClick={onEditCombineClick}
+              disabled={resolvingEdit}
+            >
+              {resolvingEdit ? 'Looking up…' : 'Combine into the existing Contact'}
+            </button>
+            <button
+              type="button"
+              className="row-action-pill"
+              onClick={onDismiss}
+            >
+              Use a different email
+            </button>
+          </div>
+        )}
         <span className="dup-email-callout-sub">
           Save blocked · duplicate Primary Email
         </span>
       </div>
-      {combineMode?.kind === 'launcher' && editingContactId ? (
+      {launcherKeeperId && editingContactId ? (
         <CombineLauncher
           knownContactId={editingContactId}
           knownContactName={editingContactName ?? '(this Contact)'}
-          preselectedKeeperId={combineMode.keeperId}
-          onClose={() => setCombineMode(null)}
+          preselectedKeeperId={launcherKeeperId}
+          onClose={() => setLauncherKeeperId(null)}
         />
-      ) : null}
-      {combineMode?.kind === 'placeholder' ? (
-        <FR9PlaceholderModal onClose={() => setCombineMode(null)} />
       ) : null}
     </>
   )

@@ -17,10 +17,23 @@ import type {
   ChannelEntry,
 } from '@/lib/types/contact'
 import type { Pitch } from '@/lib/types/pitch'
+import type { DealStage } from '@/lib/types/deal'
 import type {
   MergeInputs,
   PitchWithProvenance,
 } from '@/lib/contact-merge'
+
+// PostgREST embed shape — each pitch row carries a nested `deals` array (FK
+// from deals.pitch_id). v1 UX is 1-to-1, so we extract deals[0]; multi-deal
+// support deferred (no spec). Falls back to nulls when no deal row exists
+// (e.g., auto-create skip-list excludes inbound spam / not_a_pitch).
+type PitchWithDealEmbed = Pitch & {
+  deals: Array<{
+    stage: DealStage
+    current_budget_amount: number | null
+    current_budget_currency: string | null
+  }>
+}
 
 // ============================================================================
 // Email-owner lookup — for the DupEmailCallout entry point
@@ -34,13 +47,16 @@ import type {
 
 export async function findContactByPrimaryEmail(
   email: string,
-): Promise<{ id: string; display_name: string | null } | null> {
+): Promise<{ id: string; slug: string | null; display_name: string | null } | null> {
   const supabase = createClient()
   // The partial UNIQUE index uses lower(<primary-email-identifier>); mirror
   // that here to find the right row regardless of input casing.
+  // Slug included so the DupEmailCallout CREATE-flow "Open <name> Contact"
+  // button can route to a slug-readable URL when present (Founder direction
+  // 2026-06-02 mid-smoke; falls back to id at the callsite).
   const { data, error } = await supabase
     .from('contacts')
-    .select('id, display_name, channels')
+    .select('id, slug, display_name, channels')
     .limit(50)
   if (error) {
     console.error('findContactByPrimaryEmail: select failed', error)
@@ -58,7 +74,7 @@ export async function findContactByPrimaryEmail(
         c.identifier.toLowerCase() === lower,
     )
     if (primaryEmail) {
-      return { id: row.id, display_name: row.display_name }
+      return { id: row.id, slug: row.slug ?? null, display_name: row.display_name }
     }
   }
   return null
@@ -117,6 +133,11 @@ export async function loadMergeInputs(
 
   // Parallel-fetch the four base sets. RLS scopes everything to the authed
   // user; the .in() filters narrow to the two contacts.
+  // Pitches embed their `deals` row via PostgREST (FK deals.pitch_id); v1 1-to-1
+  // means deals[0] or empty. Embedding avoids a separate round-trip on the
+  // hundreds-of-pitches edge case (Founder direction 2026-06-02 scale guard).
+  const PITCHES_SELECT =
+    '*, deals(stage, current_budget_amount, current_budget_currency)'
   const [contactsRes, brandsRes, pivotsRes, pitchesByFkRes] = await Promise.all([
     supabase.from('contacts').select('*').in('id', [survivorId, loserId]),
     supabase
@@ -129,7 +150,7 @@ export async function loadMergeInputs(
       .in('contact_id', [survivorId, loserId]),
     supabase
       .from('pitches')
-      .select('*')
+      .select(PITCHES_SELECT)
       .in('contact_id', [survivorId, loserId]),
   ])
 
@@ -163,8 +184,8 @@ export async function loadMergeInputs(
   // pitches.contact_id IN [...]; the pivot fetch tells us which pitches are
   // ALSO referenced via M:N — those rows we still need to fetch if they
   // weren't in the FK set.
-  const pitchesByFk = (pitchesByFkRes.data ?? []) as Pitch[]
-  const haveById = new Map<string, Pitch>()
+  const pitchesByFk = (pitchesByFkRes.data ?? []) as PitchWithDealEmbed[]
+  const haveById = new Map<string, PitchWithDealEmbed>()
   for (const p of pitchesByFk) haveById.set(p.id, p)
 
   const allPivotPitchIds = new Set([
@@ -177,13 +198,14 @@ export async function loadMergeInputs(
   if (missingPivotPitchIds.length > 0) {
     const { data: extraPitches, error: extraErr } = await supabase
       .from('pitches')
-      .select('*')
+      .select(PITCHES_SELECT)
       .in('id', missingPivotPitchIds)
     if (extraErr) throw extraErr
-    for (const p of (extraPitches ?? []) as Pitch[]) haveById.set(p.id, p)
+    for (const p of (extraPitches ?? []) as PitchWithDealEmbed[])
+      haveById.set(p.id, p)
   }
 
-  // Annotate provenance for each pitch the wizard renders.
+  // Annotate provenance + extract deal data for each pitch the wizard renders.
   // Source rules:
   //   - 'both'     — pitch is referenced from BOTH contacts (either via FK
   //                  pointing one + pivot pointing the other, or via pivots
@@ -191,6 +213,8 @@ export async function loadMergeInputs(
   //   - 'survivor' — pitch comes from survivor only.
   //   - 'loser'    — pitch comes from loser only.
   // FK ownership counts as one-side; pivots count as one-side.
+  // Deal fields: deals[0] (v1 UX 1-to-1). Null fall-through for pitches with
+  // no deal row (e.g., auto-create skip-list excludes inbound spam/not_a_pitch).
   const pitches: PitchWithProvenance[] = []
   for (const p of haveById.values()) {
     const fromSurvivor =
@@ -203,7 +227,18 @@ export async function loadMergeInputs(
         : fromSurvivor
           ? 'survivor'
           : 'loser'
-    pitches.push({ ...p, source })
+    const deal = p.deals?.[0] ?? null
+    // Strip the embed-only `deals` field from the spread so the resulting
+    // PitchWithProvenance stays clean.
+    const { deals: _deals, ...basePitch } = p
+    void _deals
+    pitches.push({
+      ...basePitch,
+      source,
+      deal_stage: deal?.stage ?? null,
+      deal_current_amount: deal?.current_budget_amount ?? null,
+      deal_current_currency: deal?.current_budget_currency ?? null,
+    })
   }
 
   // Brands lookup — unique brand_ids from contact_brands + pitches.brand_id.

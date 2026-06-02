@@ -24,9 +24,11 @@
 //     `grid-template-columns: 1fr 1fr` on the review; not formal subgrid).
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import {
   computeDefaultResolutions,
   computeMergeResult,
+  computePrimaryDiscardKey,
   type MergeInputs,
   type MergePayload,
   type MergeResolutions,
@@ -35,6 +37,9 @@ import {
   type BrandResolution,
 } from '@/lib/contact-merge'
 import type { ChannelEntry, ContactRole } from '@/lib/types/contact'
+import { formatCurrencyAmount } from '@/lib/pitch-stats'
+import type { PitchWithProvenance } from '@/lib/contact-merge'
+import { StageChip } from '@/components/StageChip'
 
 // ============================================================================
 // PROPS
@@ -53,11 +58,19 @@ export interface CombineWizardProps {
   //     the blocked Contact is intentionally the loser; user picked the
   //     "other" via typeahead as the keeper).
   defaultSurvivor: 'survivor' | 'loser'
+  // Cancel-shape close: ESC / backdrop / Cancel / ✕. The parent does NOT
+  // navigate on this path — user stays on the source surface (per smoke fix
+  // 2026-06-02 §1 "Cancel button bug").
   onClose: () => void
+  // Success-shape close: Step 4 Done "Open <keeper> →" button only. The
+  // parent navigates to survivor's /app/people page (AC3.5). When omitted,
+  // the wizard falls back to onClose for that button — useful for tests /
+  // callers that want a single close handler.
+  onSuccessClose?: () => void
   // Parent commits the payload (typically supabase.rpc('merge_contacts', payload))
   // and returns success/error. On success, the wizard advances to the Done step;
-  // the user's "Close" click then triggers onClose (parent handles navigation
-  // to survivor's /app/people/[person] per AC3.5).
+  // the user's "Close" click then triggers onSuccessClose (parent handles
+  // navigation to survivor's /app/people/[person] per AC3.5).
   onCommit: (payload: MergePayload) => Promise<{ success: true } | { success: false; error: string }>
 }
 
@@ -215,9 +228,23 @@ function computeConflicts(eff: EffectiveInputs): Conflict[] {
 // ============================================================================
 // "Everything that merges with no decision needed" — for the Resolve step's
 // carry-over panel reassurance copy. Cheap derivation; not load-bearing.
+//
+// Smoke fix 2026-06-02 §1.16: the non-picked Primary value gets DISCARDED
+// from the merged channels (see computePrimaryDiscardKey in contact-merge.ts).
+// The carry-over panel must filter against the same discardKey so the user
+// sees the same channel set in Step 2's carry-over and Step 3's preview.
 
-function carryOverItems(eff: EffectiveInputs): string[] {
+function carryOverItems(
+  eff: EffectiveInputs,
+  resolutions: MergeResolutions,
+): string[] {
   const items: string[] = []
+  // Discarded Primary key — computed against EFFECTIVE inputs (keeper-on-left
+  // semantics) so the carry-over panel filters against the same key that
+  // `mergeChannels` uses when building the merged channel set. Prior version
+  // passed original inputs which drifted from mergeChannels after a keeper-
+  // flip.
+  const discardKey = computePrimaryDiscardKey(eff, resolutions)
 
   // Non-primary channels from the other contact (won't conflict; carry into union)
   const keeperKeys = new Set(
@@ -226,6 +253,7 @@ function carryOverItems(eff: EffectiveInputs): string[] {
   for (const ch of eff.other.channels) {
     const key = `${ch.kind}::${ch.identifier}`
     if (keeperKeys.has(key)) continue
+    if (key === discardKey) continue
     items.push(`${ch.kind} ${ch.identifier}`)
   }
 
@@ -270,6 +298,23 @@ const CHANNEL_DOT_CLASS: Record<string, string> = {
 
 export function CombineWizard(props: CombineWizardProps) {
   const { inputs, defaultSurvivor, onClose, onCommit } = props
+  const onSuccessClose = props.onSuccessClose ?? props.onClose
+
+  // Smoke fix 2026-06-02 §1 close animation — defer the actual unmount so the
+  // overlay + card can run their exit keyframes (mirror the entry shape).
+  // Duration must match the CSS `cwCardOut` / `pitch-modal-overlay-fade-out`
+  // (180ms).
+  const [closing, setClosing] = useState(false)
+  const requestClose = useCallback(() => {
+    if (closing) return
+    setClosing(true)
+    window.setTimeout(() => onClose(), 180)
+  }, [closing, onClose])
+  const requestSuccessClose = useCallback(() => {
+    if (closing) return
+    setClosing(true)
+    window.setTimeout(() => onSuccessClose(), 180)
+  }, [closing, onSuccessClose])
 
   // Step state. Numeric for rail iteration; 4 = Done success.
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
@@ -307,16 +352,21 @@ export function CombineWizard(props: CombineWizardProps) {
 
   // Conflicts list (for Step 2 rendering).
   const conflicts = useMemo(() => computeConflicts(eff), [eff])
-  const carryItems = useMemo(() => carryOverItems(eff), [eff])
+  // Re-runs on resolutions change so the carry-over panel updates as the user
+  // picks Primary at the chooser (the discarded Primary value drops out).
+  const carryItems = useMemo(
+    () => carryOverItems(eff, resolutions),
+    [eff, resolutions],
+  )
 
   // Escape key dismiss — except during commit + success.
   useEffect(() => {
     function onKey(ev: KeyboardEvent) {
-      if (ev.key === 'Escape' && !committing && step !== 4) onClose()
+      if (ev.key === 'Escape' && !committing && step !== 4) requestClose()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [committing, step, onClose])
+  }, [committing, step, requestClose])
 
   // Step transition — recompute preview on Step-3 entry.
   const goToStep = useCallback(
@@ -433,9 +483,9 @@ export function CombineWizard(props: CombineWizardProps) {
 
   return (
     <div
-      className="pitch-modal-overlay"
+      className={`pitch-modal-overlay cw-overlay ${closing ? 'is-closing' : ''}`}
       onClick={(e) => {
-        if (e.target === e.currentTarget && !committing && step !== 4) onClose()
+        if (e.target === e.currentTarget && !committing && step !== 4) requestClose()
       }}
     >
       <div
@@ -475,7 +525,7 @@ export function CombineWizard(props: CombineWizardProps) {
           <button
             type="button"
             className="cw-band-close"
-            onClick={onClose}
+            onClick={requestClose}
             disabled={committing}
             aria-label="Close"
           >
@@ -486,59 +536,74 @@ export function CombineWizard(props: CombineWizardProps) {
         {/* Body — step-specific panels */}
         <div className="cw-body">
           {step === 1 && (
-            <Step1Review
-              eff={eff}
-              keeperIsLeft={keeperIsLeft}
-              onPickLeft={setKeeperLeft}
-              onPickRight={setKeeperRight}
-              conflictsCount={conflicts.length}
-              channelUnionCount={channelUnionCount}
-              brandUnionCount={brandUnionCount}
-            />
+            <div className="cw-step is-on" key="cw-s1">
+              <Step1Review
+                inputs={inputs}
+                keeperIsLeft={keeperIsLeft}
+                onPickLeft={setKeeperLeft}
+                onPickRight={setKeeperRight}
+                conflictsCount={conflicts.length}
+                channelUnionCount={channelUnionCount}
+                brandUnionCount={brandUnionCount}
+                brandLookup={inputs.brand_lookup}
+              />
+            </div>
           )}
           {step === 2 && (
-            <Step2Resolve
-              conflicts={conflicts}
-              carryItems={carryItems}
-              resolutions={resolutions}
-              pickDisplayName={pickDisplayName}
-              pickPrimary={pickPrimary}
-              pickBrandRole={pickBrandRole}
-              pickBrandEnded={pickBrandEnded}
-              isPrimaryPicked={isPrimaryPicked}
-              isRolePicked={isRolePicked}
-              isEndedPicked={isEndedPicked}
-            />
+            <div className="cw-step is-on" key="cw-s2">
+              <Step2Resolve
+                conflicts={conflicts}
+                carryItems={carryItems}
+                resolutions={resolutions}
+                keeperIsLeft={keeperIsLeft}
+                pickDisplayName={pickDisplayName}
+                pickPrimary={pickPrimary}
+                pickBrandRole={pickBrandRole}
+                pickBrandEnded={pickBrandEnded}
+                isPrimaryPicked={isPrimaryPicked}
+                isRolePicked={isRolePicked}
+                isEndedPicked={isEndedPicked}
+              />
+            </div>
           )}
           {step === 3 && previewSnapshot && (
-            <Step3Preview
-              result={previewSnapshot}
-              keeperDisplayName={resolutions.display_name}
-              committing={committing}
-              commitError={commitError}
-              onCombine={onCombine}
-            />
+            <div className="cw-step is-on" key="cw-s3">
+              <Step3Preview
+                result={previewSnapshot}
+                keeperDisplayName={resolutions.display_name}
+                keeperSlug={eff.keeper.slug}
+                loserDisplayName={eff.other.display_name ?? '(no name)'}
+                committing={committing}
+                commitError={commitError}
+                onCombine={onCombine}
+              />
+            </div>
           )}
           {step === 4 && (
-            <Step4Done
-              keeperName={resolutions.display_name ?? '(no name)'}
-              loserName={eff.other.display_name ?? '(no name)'}
-              loserSlug={eff.other.slug}
-              pitchesCount={eff.pitches.length}
-              channelsCount={channelUnionCount}
-              onClose={onClose}
-            />
+            <div className="cw-step is-on" key="cw-s4">
+              <Step4Done
+                keeperName={resolutions.display_name ?? '(no name)'}
+                keeperHref={`/app/people/${eff.keeper.slug || eff.keeper.id}`}
+                loserName={eff.other.display_name ?? '(no name)'}
+                loserSlug={eff.other.slug}
+                pitchesCount={eff.pitches.length}
+                channelsCount={channelUnionCount}
+                onSuccessClose={requestSuccessClose}
+              />
+            </div>
           )}
         </div>
 
-        {/* Footer — hidden on success step (Done has its own button inline) */}
+        {/* Footer — hidden on success step (Done has its own button inline).
+            `data-step` lets the mobile breakpoint hide Cancel on steps 2-3
+            per the design handoff's pinned-footer canon. */}
         {step < 4 && (
-          <footer className="modal-foot cw-foot">
+          <footer className="modal-foot cw-foot" data-step={step}>
             <div className="cw-foot-l">
               <button
                 type="button"
                 className="cw-cancel"
-                onClick={onClose}
+                onClick={requestClose}
                 disabled={committing}
               >
                 ✕ Cancel
@@ -546,14 +611,14 @@ export function CombineWizard(props: CombineWizardProps) {
               <span className="cw-step-help">
                 {step === 1 && 'Step 1 of 3 · review both records'}
                 {step === 2 && `Step 2 of 3 · ${conflicts.length} to decide`}
-                {step === 3 && 'Step 3 of 3 · preview the result'}
+                {step === 3 && 'Step 3 of 3 · preview & confirm'}
               </span>
             </div>
             <div className="cw-foot-r">
               {step > 1 && (
                 <button
                   type="button"
-                  className="btn-pill ghost"
+                  className="btn-ghost"
                   onClick={() => goToStep((step - 1) as 1 | 2 | 3)}
                   disabled={committing}
                 >
@@ -580,39 +645,52 @@ export function CombineWizard(props: CombineWizardProps) {
 // ============================================================================
 // STEP 1 — Review
 // ============================================================================
+//
+// Smoke fix 2026-06-02 §1.10/§1.11/§1.14 — column positions are STABLE:
+// inputs.survivor is ALWAYS on the left, inputs.loser is ALWAYS on the right
+// regardless of keeper. The keeper state (.is-keep ring + Folds-into label +
+// merge-arrow direction) follows whichever side is currently the keeper.
+// Prior version swapped columns on keeper-flip via deriveEffective(), which
+// flipped the visual positions and put the keeper-ring always on the left.
+//
+// Smoke fix 2026-06-02 §1.8 — row-paired layout (head + 4 fields = 5 rows;
+// each row is a single CSS Grid with two cells). Matches the Stress-Test's
+// "Stepped wizard · 2-col review · dedicated resolve · full preview" canon:
+// borderlines between sections; both columns share the same height within
+// each section. Replaces the prior per-column stacks (which let sections
+// drift apart).
 
 interface Step1Props {
-  eff: EffectiveInputs
+  inputs: MergeInputs
   keeperIsLeft: boolean
   onPickLeft: () => void
   onPickRight: () => void
   conflictsCount: number
   channelUnionCount: number
   brandUnionCount: number
+  brandLookup: MergeInputs['brand_lookup']
 }
 
 function Step1Review(p: Step1Props) {
-  const left = p.eff.survivor // visually left column = always inputs.survivor
-  const right = p.eff.loser
+  const left = p.inputs.survivor
+  const right = p.inputs.loser
   const leftIsKeeper = p.keeperIsLeft
   const rightIsKeeper = !p.keeperIsLeft
 
-  const leftPitches = p.eff.pitches.filter(
+  // Pitches use ORIGINAL provenance (loader-annotated against inputs.survivor /
+  // inputs.loser), stable across keeper-flip. Both totals + preview rows
+  // (top-3 newest each) so each ReviewCellPitches can render its capped list.
+  const leftPitches = p.inputs.pitches.filter(
     (pi) => pi.source === 'survivor' || pi.source === 'both',
   )
-  const rightPitches = p.eff.pitches.filter(
+  const rightPitches = p.inputs.pitches.filter(
     (pi) => pi.source === 'loser' || pi.source === 'both',
   )
+  const leftPitchCount = leftPitches.length
+  const rightPitchCount = rightPitches.length
 
-  // To render left/right brands correctly under the swap, we look up which
-  // contact is the "survivor" in the original `inputs` shape — left always
-  // shows the original inputs.survivor's brands.
-  const leftBrands = p.eff.keeperBrands.length
-    ? leftIsKeeper
-      ? p.eff.keeperBrands
-      : p.eff.otherBrands
-    : p.eff.otherBrands
-  const rightBrands = leftIsKeeper ? p.eff.otherBrands : p.eff.keeperBrands
+  const totalPitches = p.inputs.pitches.length
+  const keepClass = leftIsKeeper ? 'is-keep-l' : 'is-keep-r'
 
   return (
     <>
@@ -622,7 +700,7 @@ function Step1Review(p: Step1Props) {
           lost — pitches and channels move to the keeper.
         </p>
         <div className="cw-summary-chips">
-          <span className="cw-chip">{p.eff.pitches.length} pitches</span>
+          <span className="cw-chip">{totalPitches} pitches</span>
           <span className="cw-chip">{p.channelUnionCount} channels</span>
           <span className="cw-chip">{p.brandUnionCount} brands</span>
           {p.conflictsCount > 0 && (
@@ -633,133 +711,277 @@ function Step1Review(p: Step1Props) {
         </div>
       </div>
 
-      <div className="cw-review">
-        {/* Merge-direction badge centered on the divider */}
-        <div className="cw-merge" data-direction={leftIsKeeper ? 'left' : 'right'}>
+      <div className={`cw-review ${keepClass}`}>
+        {/* Keep-side accent line — rendered as a `::before` pseudo on the review
+            container (CSS) so the 2px run is unbroken by per-row border-tops. */}
+        {/* Merge-direction badge — points toward whichever column is the keeper.
+            Position is stable (column-divider center); direction flips on state. */}
+        <div
+          className="cw-merge"
+          data-direction={leftIsKeeper ? 'left' : 'right'}
+          aria-hidden="true"
+        >
           →
         </div>
 
-        <ReviewColumn
-          contact={left}
-          brands={leftBrands}
-          pitchCount={leftPitches.length}
-          brandLookup={p.eff.brand_lookup}
-          isKeeper={leftIsKeeper}
-          onPick={p.onPickLeft}
-        />
-        <ReviewColumn
-          contact={right}
-          brands={rightBrands}
-          pitchCount={rightPitches.length}
-          brandLookup={p.eff.brand_lookup}
-          isKeeper={rightIsKeeper}
-          onPick={p.onPickRight}
-        />
+        {/* Row 1 — column heads (avatar + name + slug + pick pill).
+            `--cw-row-i` (0–4 per row) drives the mobile reorder
+            (keeper-stack-then-duplicate-stack) via CSS `order` in the
+            @container 760px breakpoint; no effect on desktop. */}
+        <div
+          className={`cw-row cw-row-head ${keepClass}`}
+          style={{ '--cw-row-i': 0 } as React.CSSProperties}
+        >
+          <ReviewHead contact={left} isKeeper={leftIsKeeper} onPick={p.onPickLeft} />
+          <ReviewHead contact={right} isKeeper={rightIsKeeper} onPick={p.onPickRight} />
+        </div>
+
+        {/* Row 2 — Display name */}
+        <div
+          className={`cw-row ${keepClass}`}
+          style={{ '--cw-row-i': 1 } as React.CSSProperties}
+        >
+          <ReviewCellName label="Display name" value={left.display_name} />
+          <ReviewCellName label="Display name" value={right.display_name} />
+        </div>
+
+        {/* Row 3 — Channels */}
+        <div
+          className={`cw-row ${keepClass}`}
+          style={{ '--cw-row-i': 2 } as React.CSSProperties}
+        >
+          <ReviewCellChannels channels={left.channels} />
+          <ReviewCellChannels channels={right.channels} />
+        </div>
+
+        {/* Row 4 — Brands */}
+        <div
+          className={`cw-row ${keepClass}`}
+          style={{ '--cw-row-i': 3 } as React.CSSProperties}
+        >
+          <ReviewCellBrands
+            brands={p.inputs.survivor_brands}
+            brandLookup={p.brandLookup}
+          />
+          <ReviewCellBrands
+            brands={p.inputs.loser_brands}
+            brandLookup={p.brandLookup}
+          />
+        </div>
+
+        {/* Row 5 — Pitches: capped list (top-3 newest) + rollup */}
+        <div
+          className={`cw-row ${keepClass}`}
+          style={{ '--cw-row-i': 4 } as React.CSSProperties}
+        >
+          <ReviewCellPitches
+            pitches={leftPitches}
+            total={leftPitchCount}
+            brandLookup={p.brandLookup}
+          />
+          <ReviewCellPitches
+            pitches={rightPitches}
+            total={rightPitchCount}
+            brandLookup={p.brandLookup}
+          />
+        </div>
       </div>
     </>
   )
 }
 
-interface ReviewColumnProps {
-  contact: EffectiveInputs['survivor']
-  brands: EffectiveInputs['survivor_brands']
-  pitchCount: number
-  brandLookup: EffectiveInputs['brand_lookup']
+// ----- Row cells ------------------------------------------------------------
+
+interface ReviewHeadProps {
+  contact: MergeInputs['survivor']
   isKeeper: boolean
   onPick: () => void
 }
 
-function ReviewColumn(p: ReviewColumnProps) {
+function ReviewHead(p: ReviewHeadProps) {
   const initial = (p.contact.display_name?.[0] ?? '·').toUpperCase()
+  // Canon shape (Stress-Test lines 416-426): col-head is a vertical stack of
+  // three rows — [cw-col-id: avatar + name/slug pair] → [cw-col-pick: pill] →
+  // [cw-col-foldlabel: "Folds into the keeper" on non-keeper only]. The
+  // foldlabel renders always; CSS toggles visibility per side via the row's
+  // `is-keep-l` / `is-keep-r` class. The ↘ glyph comes from CSS ::before.
   return (
-    <div className={`cw-col ${p.isKeeper ? 'is-keep' : ''}`}>
-      <button type="button" className="cw-col-head" onClick={p.onPick}>
+    <button type="button" className="cw-col-head" onClick={p.onPick}>
+      <span className="cw-col-id">
         <span className="cw-col-avatar">{initial}</span>
-        <span className="cw-col-id">
+        <span className="cw-col-id-body">
           <span className="cw-col-name">
             {p.contact.display_name ?? '(no name)'}
           </span>
           {p.contact.slug && <span className="cw-col-slug">/{p.contact.slug}</span>}
         </span>
-        <span className="cw-col-pick">
-          <span className="cw-pick-radio" />
-          {p.isKeeper ? 'Keep' : 'Pick to keep'}
-        </span>
-      </button>
-      {!p.isKeeper && (
-        <span className="cw-col-foldlabel">↘ Folds into the keeper</span>
+      </span>
+      <span className="cw-col-pick">
+        <span className="cw-pick-radio" />
+        {p.isKeeper ? 'Keep' : 'Pick to keep'}
+      </span>
+      <span className="cw-col-foldlabel">Folds into the keeper</span>
+    </button>
+  )
+}
+
+function ReviewCellName({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="cw-field">
+      <span className="cw-field-l">{label}</span>
+      <span className="cw-field-v">
+        {value ?? <em style={{ color: 'var(--ink-4)' }}>(no name)</em>}
+      </span>
+    </div>
+  )
+}
+
+function ReviewCellChannels({ channels }: { channels: ChannelEntry[] }) {
+  return (
+    <div className="cw-field">
+      <span className="cw-field-l">
+        Channels
+        <span className="cw-field-l-tag">{channels.length}</span>
+      </span>
+      <ul className="cw-field-list">
+        {channels.length === 0 && (
+          <li style={{ color: 'var(--ink-4)' }}>(none)</li>
+        )}
+        {channels.map((ch, i) => (
+          <li key={`${ch.kind}-${ch.identifier}-${i}`}>
+            <span
+              className={`cw-channel-dot ${CHANNEL_DOT_CLASS[ch.kind] ?? ''}`}
+              style={{ background: `var(--${CHANNEL_DOT_CLASS[ch.kind] ?? 'ink'})` }}
+            />
+            <span>
+              {ch.identifier}
+              {ch.primary && (
+                <span className="cw-channel-primary" style={{ marginLeft: 6 }}>
+                  Primary
+                </span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+interface ReviewCellBrandsProps {
+  brands: MergeInputs['survivor_brands']
+  brandLookup: MergeInputs['brand_lookup']
+}
+
+function ReviewCellBrands(p: ReviewCellBrandsProps) {
+  // Sort: active brands first, then by created_at desc. Take top-N + rollup.
+  // Scale guard mirrors the Pitches cell — hundreds-of-brands case shouldn't
+  // blow out the Step-1 row height.
+  const sorted = [...p.brands].sort((a, b) => {
+    const aActive = a.ended_at === null
+    const bActive = b.ended_at === null
+    if (aActive !== bActive) return aActive ? -1 : 1
+    return b.created_at.localeCompare(a.created_at)
+  })
+  const preview = sorted.slice(0, BRAND_PREVIEW_CAP)
+  const overflow = Math.max(0, p.brands.length - preview.length)
+  return (
+    <div className="cw-field">
+      <span className="cw-field-l">
+        Brands
+        <span className="cw-field-l-tag">{p.brands.length}</span>
+      </span>
+      <ul className="cw-field-list">
+        {preview.length === 0 && (
+          <li style={{ color: 'var(--ink-4)' }}>(none)</li>
+        )}
+        {preview.map((cb) => (
+          <li key={cb.brand_id}>
+            <span>
+              {p.brandLookup.get(cb.brand_id)?.name ?? '(brand)'}
+              {cb.role && (
+                <span style={{ color: 'var(--ink-4)', marginLeft: 8 }}>
+                  · {cb.role}
+                </span>
+              )}
+              {cb.ended_at && (
+                <span style={{ color: 'var(--ink-4)', marginLeft: 8 }}>
+                  · ended
+                </span>
+              )}
+            </span>
+          </li>
+        ))}
+        {overflow > 0 && (
+          <li className="cw-field-list-more">+ {overflow} more</li>
+        )}
+      </ul>
+    </div>
+  )
+}
+
+// Render top-3 newest pitches per canon `.cw-pitchrow` row shape; cap at 3 +
+// "+N more" rollup line so 100-pitch contacts (clean-up merges) don't blow
+// out modal height. Per Founder direction 2026-06-02 (b option).
+const PITCH_PREVIEW_CAP = 3
+// Step-1 brand list — same scale-guard pattern as pitches. 3 newest + rollup.
+const BRAND_PREVIEW_CAP = 3
+// Step-3 preview caps (Founder direction 2026-06-02 scale guard for hundreds-
+// of-brands and hundreds-of-pitches edge case). Both surfaces keep header
+// content scannable; the full set lives on the survivor's detail page post-
+// merge.
+const BRAND_CARD_CAP = 6
+const PITCH_HISTORY_CAP = 12
+
+function ReviewCellPitches(p: {
+  pitches: PitchWithProvenance[]
+  total: number
+  brandLookup: MergeInputs['brand_lookup']
+}) {
+  const sorted = [...p.pitches].sort((a, b) =>
+    b.created_at.localeCompare(a.created_at),
+  )
+  const preview = sorted.slice(0, PITCH_PREVIEW_CAP)
+  const overflow = Math.max(0, p.total - preview.length)
+  return (
+    <div className="cw-field">
+      <span className="cw-field-l">
+        Pitches
+        <span className="cw-field-l-tag">{p.total}</span>
+      </span>
+      {preview.length === 0 ? (
+        <span style={{ color: 'var(--ink-4)', fontSize: 13 }}>(none)</span>
+      ) : (
+        <div className="cw-pitchlist">
+          {preview.map((pi) => {
+            const brand = pi.brand_id
+              ? p.brandLookup.get(pi.brand_id)?.name ?? pi.brand_name
+              : pi.brand_name
+            const amount =
+              pi.budget_amount != null && pi.budget_currency
+                ? formatCurrencyAmount(pi.budget_currency, pi.budget_amount)
+                : null
+            const summary = pi.ai_summary?.trim() ?? ''
+            return (
+              <div className="cw-pitchrow" key={pi.id}>
+                <span className="cw-pitchrow-d">{shortDate(pi.created_at)}</span>
+                <span className="cw-pitchrow-s">
+                  {brand ? <b>{brand}</b> : <b>(no brand)</b>}
+                  {summary && <> · {summary}</>}
+                </span>
+                <span
+                  className={`cw-pitchrow-a${amount ? '' : ' is-muted'}`}
+                >
+                  {amount ?? '—'}
+                </span>
+              </div>
+            )
+          })}
+          {overflow > 0 && (
+            <div className="cw-pitchrow-more">+ {overflow} more</div>
+          )}
+        </div>
       )}
-
-      <div className="cw-field">
-        <span className="cw-field-l">Display name</span>
-        <span className="cw-field-v">
-          {p.contact.display_name ?? <em style={{ color: 'var(--ink-4)' }}>(no name)</em>}
-        </span>
-      </div>
-
-      <div className="cw-field">
-        <span className="cw-field-l">
-          Channels
-          <span className="cw-field-l-tag">{p.contact.channels.length}</span>
-        </span>
-        <ul className="cw-field-list">
-          {p.contact.channels.length === 0 && (
-            <li style={{ color: 'var(--ink-4)' }}>(none)</li>
-          )}
-          {p.contact.channels.map((ch, i) => (
-            <li key={`${ch.kind}-${ch.identifier}-${i}`}>
-              <span
-                className={`cw-channel-dot ${CHANNEL_DOT_CLASS[ch.kind] ?? ''}`}
-                style={{ background: `var(--${CHANNEL_DOT_CLASS[ch.kind] ?? 'ink'})` }}
-              />
-              <span>
-                {ch.identifier}
-                {ch.primary && (
-                  <span className="cw-channel-primary" style={{ marginLeft: 6 }}>
-                    Primary
-                  </span>
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="cw-field">
-        <span className="cw-field-l">
-          Brands
-          <span className="cw-field-l-tag">{p.brands.length}</span>
-        </span>
-        <ul className="cw-field-list">
-          {p.brands.length === 0 && (
-            <li style={{ color: 'var(--ink-4)' }}>(none)</li>
-          )}
-          {p.brands.map((cb) => (
-            <li key={cb.brand_id}>
-              <span>
-                {p.brandLookup.get(cb.brand_id)?.name ?? '(brand)'}
-                {cb.role && (
-                  <span style={{ color: 'var(--ink-4)', marginLeft: 8 }}>
-                    · {cb.role}
-                  </span>
-                )}
-                {cb.ended_at && (
-                  <span style={{ color: 'var(--ink-4)', marginLeft: 8 }}>
-                    · ended
-                  </span>
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="cw-field">
-        <span className="cw-field-l">
-          Pitches
-          <span className="cw-field-l-tag">{p.pitchCount}</span>
-        </span>
-      </div>
     </div>
   )
 }
@@ -772,6 +994,14 @@ interface Step2Props {
   conflicts: Conflict[]
   carryItems: string[]
   resolutions: MergeResolutions
+  // Smoke fix 2026-06-02 §1.14: chooser-card LEFT/RIGHT positions mirror the
+  // Step-1 column LEFT/RIGHT positions. When keeperIsLeft=true, conflict
+  // `keeperValue` renders on the LEFT card and `otherValue` on the RIGHT
+  // card (i.e., current behavior); when keeperIsLeft=false (user flipped at
+  // Step 1), the keeperValue belongs on the RIGHT and otherValue on the LEFT.
+  // The pre-set marker + "Keeper" / "Duplicate" copy follow the keeper side;
+  // data stays in its respective column.
+  keeperIsLeft: boolean
   pickDisplayName: (value: string | null) => void
   pickPrimary: (channel: ChannelKey) => void
   pickBrandRole: (brand_id: string, role: ContactRole | null) => void
@@ -827,6 +1057,7 @@ function Step2Resolve(p: Step2Props) {
           key={`${c.kind}-${i}`}
           conflict={c}
           resolutions={p.resolutions}
+          keeperIsLeft={p.keeperIsLeft}
           pickDisplayName={p.pickDisplayName}
           pickPrimary={p.pickPrimary}
           pickBrandRole={p.pickBrandRole}
@@ -854,6 +1085,7 @@ function Step2Resolve(p: Step2Props) {
 interface ConflictChooserProps {
   conflict: Conflict
   resolutions: MergeResolutions
+  keeperIsLeft: boolean
   pickDisplayName: (value: string | null) => void
   pickPrimary: (channel: ChannelKey) => void
   pickBrandRole: (brand_id: string, role: ContactRole | null) => void
@@ -867,12 +1099,26 @@ interface ConflictChooserProps {
   isEndedPicked: (brand_id: string, ended_at: string) => boolean
 }
 
+// Helpers for picking which conflict side (keeper vs other) lands on which
+// chooser-card slot (LEFT vs RIGHT). Step-1 column LEFT always holds the
+// original inputs.survivor; eff.keeper aligns with that ONLY when
+// keeperIsLeft=true. When keeperIsLeft=false, eff.keeper is the original
+// inputs.loser (right column). The chooser must mirror Step-1's stable
+// LEFT/RIGHT layout: left card = left column's value; right card = right
+// column's value. The keeper label / pre-set marker follows the keeper side.
+const KEEPER_LABEL = 'Keeper'
+const DUP_LABEL = 'Duplicate'
+
 function ConflictChooser(p: ConflictChooserProps) {
   const c = p.conflict
+  const leftIsKeeper = p.keeperIsLeft
+  const rightIsKeeper = !p.keeperIsLeft
 
   if (c.kind === 'display_name') {
-    const isKeeperPicked = p.resolutions.display_name === c.keeperValue
-    const isOtherPicked = p.resolutions.display_name === c.otherValue
+    const leftValue = leftIsKeeper ? c.keeperValue : c.otherValue
+    const rightValue = leftIsKeeper ? c.otherValue : c.keeperValue
+    const isLeftPicked = p.resolutions.display_name === leftValue
+    const isRightPicked = p.resolutions.display_name === rightValue
     return (
       <div className="cw-conflict">
         <div className="cw-conflict-l">
@@ -883,17 +1129,18 @@ function ConflictChooser(p: ConflictChooserProps) {
         </div>
         <div className="cw-choices">
           <ChooserCard
-            isSelected={isKeeperPicked}
-            isPreset
-            who="Keeper"
-            value={c.keeperValue ?? '(no name)'}
-            onClick={() => p.pickDisplayName(c.keeperValue)}
+            isSelected={isLeftPicked}
+            isPreset={leftIsKeeper}
+            who={leftIsKeeper ? KEEPER_LABEL : DUP_LABEL}
+            value={leftValue ?? '(no name)'}
+            onClick={() => p.pickDisplayName(leftValue)}
           />
           <ChooserCard
-            isSelected={isOtherPicked}
-            who="Duplicate"
-            value={c.otherValue ?? '(no name)'}
-            onClick={() => p.pickDisplayName(c.otherValue)}
+            isSelected={isRightPicked}
+            isPreset={rightIsKeeper}
+            who={rightIsKeeper ? KEEPER_LABEL : DUP_LABEL}
+            value={rightValue ?? '(no name)'}
+            onClick={() => p.pickDisplayName(rightValue)}
           />
         </div>
       </div>
@@ -901,6 +1148,8 @@ function ConflictChooser(p: ConflictChooserProps) {
   }
 
   if (c.kind === 'primary') {
+    const leftChannel = leftIsKeeper ? c.keeperChannel : c.otherChannel
+    const rightChannel = leftIsKeeper ? c.otherChannel : c.keeperChannel
     return (
       <div className="cw-conflict">
         <div className="cw-conflict-l">
@@ -911,27 +1160,28 @@ function ConflictChooser(p: ConflictChooserProps) {
         </div>
         <div className="cw-choices">
           <ChooserCard
-            isSelected={p.isPrimaryPicked(c.keeperChannel)}
-            isPreset
-            who={`Keeper · ${c.keeperChannel.kind}`}
-            value={c.keeperChannel.identifier}
+            isSelected={p.isPrimaryPicked(leftChannel)}
+            isPreset={leftIsKeeper}
+            who={`${leftIsKeeper ? KEEPER_LABEL : DUP_LABEL} · ${leftChannel.kind}`}
+            value={leftChannel.identifier}
             isMono
             onClick={() =>
               p.pickPrimary({
-                kind: c.keeperChannel.kind,
-                identifier: c.keeperChannel.identifier,
+                kind: leftChannel.kind,
+                identifier: leftChannel.identifier,
               })
             }
           />
           <ChooserCard
-            isSelected={p.isPrimaryPicked(c.otherChannel)}
-            who={`Duplicate · ${c.otherChannel.kind}`}
-            value={c.otherChannel.identifier}
+            isSelected={p.isPrimaryPicked(rightChannel)}
+            isPreset={rightIsKeeper}
+            who={`${rightIsKeeper ? KEEPER_LABEL : DUP_LABEL} · ${rightChannel.kind}`}
+            value={rightChannel.identifier}
             isMono
             onClick={() =>
               p.pickPrimary({
-                kind: c.otherChannel.kind,
-                identifier: c.otherChannel.identifier,
+                kind: rightChannel.kind,
+                identifier: rightChannel.identifier,
               })
             }
           />
@@ -941,6 +1191,8 @@ function ConflictChooser(p: ConflictChooserProps) {
   }
 
   if (c.kind === 'brand_role') {
+    const leftRole = leftIsKeeper ? c.keeperRole : c.otherRole
+    const rightRole = leftIsKeeper ? c.otherRole : c.keeperRole
     return (
       <div className="cw-conflict">
         <div className="cw-conflict-l">
@@ -951,17 +1203,18 @@ function ConflictChooser(p: ConflictChooserProps) {
         </div>
         <div className="cw-choices">
           <ChooserCard
-            isSelected={p.isRolePicked(c.brand_id, c.keeperRole)}
-            isPreset
-            who="Keeper"
-            value={c.keeperRole ?? '(no role)'}
-            onClick={() => p.pickBrandRole(c.brand_id, c.keeperRole)}
+            isSelected={p.isRolePicked(c.brand_id, leftRole)}
+            isPreset={leftIsKeeper}
+            who={leftIsKeeper ? KEEPER_LABEL : DUP_LABEL}
+            value={leftRole ?? '(no role)'}
+            onClick={() => p.pickBrandRole(c.brand_id, leftRole)}
           />
           <ChooserCard
-            isSelected={p.isRolePicked(c.brand_id, c.otherRole)}
-            who="Duplicate"
-            value={c.otherRole ?? '(no role)'}
-            onClick={() => p.pickBrandRole(c.brand_id, c.otherRole)}
+            isSelected={p.isRolePicked(c.brand_id, rightRole)}
+            isPreset={rightIsKeeper}
+            who={rightIsKeeper ? KEEPER_LABEL : DUP_LABEL}
+            value={rightRole ?? '(no role)'}
+            onClick={() => p.pickBrandRole(c.brand_id, rightRole)}
           />
         </div>
       </div>
@@ -969,8 +1222,12 @@ function ConflictChooser(p: ConflictChooserProps) {
   }
 
   // brand_ended
-  const keeperDate = formatDate(c.keeperEndedAt)
-  const otherDate = formatDate(c.otherEndedAt)
+  const leftEndedAt = leftIsKeeper ? c.keeperEndedAt : c.otherEndedAt
+  const leftEndedReason = leftIsKeeper ? c.keeperEndedReason : c.otherEndedReason
+  const rightEndedAt = leftIsKeeper ? c.otherEndedAt : c.keeperEndedAt
+  const rightEndedReason = leftIsKeeper ? c.otherEndedReason : c.keeperEndedReason
+  const leftDate = formatDate(leftEndedAt)
+  const rightDate = formatDate(rightEndedAt)
   return (
     <div className="cw-conflict">
       <div className="cw-conflict-l">
@@ -982,20 +1239,21 @@ function ConflictChooser(p: ConflictChooserProps) {
       </div>
       <div className="cw-choices">
         <ChooserCard
-          isSelected={p.isEndedPicked(c.brand_id, c.keeperEndedAt)}
-          isPreset
-          who="Keeper"
-          value={`${keeperDate}${c.keeperEndedReason ? ` · ${c.keeperEndedReason}` : ''}`}
+          isSelected={p.isEndedPicked(c.brand_id, leftEndedAt)}
+          isPreset={leftIsKeeper}
+          who={leftIsKeeper ? KEEPER_LABEL : DUP_LABEL}
+          value={`${leftDate}${leftEndedReason ? ` · ${leftEndedReason}` : ''}`}
           onClick={() =>
-            p.pickBrandEnded(c.brand_id, c.keeperEndedAt, c.keeperEndedReason)
+            p.pickBrandEnded(c.brand_id, leftEndedAt, leftEndedReason)
           }
         />
         <ChooserCard
-          isSelected={p.isEndedPicked(c.brand_id, c.otherEndedAt)}
-          who="Duplicate"
-          value={`${otherDate}${c.otherEndedReason ? ` · ${c.otherEndedReason}` : ''}`}
+          isSelected={p.isEndedPicked(c.brand_id, rightEndedAt)}
+          isPreset={rightIsKeeper}
+          who={rightIsKeeper ? KEEPER_LABEL : DUP_LABEL}
+          value={`${rightDate}${rightEndedReason ? ` · ${rightEndedReason}` : ''}`}
           onClick={() =>
-            p.pickBrandEnded(c.brand_id, c.otherEndedAt, c.otherEndedReason)
+            p.pickBrandEnded(c.brand_id, rightEndedAt, rightEndedReason)
           }
         />
       </div>
@@ -1040,6 +1298,15 @@ function ChooserCard(p: ChooserCardProps) {
 interface Step3Props {
   result: MergeResult
   keeperDisplayName: string | null
+  // Survivor's slug (the one kept post-merge per merge_contacts RPC; loser's
+  // slug becomes a 301 alias in previous_slugs). Threaded from eff.keeper.slug
+  // so it tracks whichever side is currently the keeper.
+  keeperSlug: string | null
+  // Smoke fix 2026-06-02 §3: "from <loserName>" replaces the generic "from
+  // dup" / "from duplicate" labels on pitch-history rows and brand-card meta.
+  // Passed from the wizard via eff.other.display_name so the label tracks
+  // whichever side is currently the loser (stable across keeper-flip).
+  loserDisplayName: string
   committing: boolean
   commitError: string | null
   onCombine: () => void
@@ -1060,10 +1327,15 @@ function Step3Preview(p: Step3Props) {
           <span className="cw-result-avatar">{initial}</span>
           <div className="cw-result-id">
             <h2 className="cw-result-h1">{preview.display_name ?? '(no name)'}</h2>
-            <span className="cw-result-meta">
-              {preview.channels.length} channels · {preview.brand_cards.length} brands ·{' '}
-              {preview.pitch_history.length} pitches
-            </span>
+            {/* Meta line: slug + counts per canon (Stress-Test 590-594).
+                Each item is its own span; the `·` separator is rendered by
+                `.cw-result-meta span+span::before`. */}
+            <div className="cw-result-meta">
+              {p.keeperSlug && <span>/app/people/{p.keeperSlug}</span>}
+              <span>{preview.pitch_history.length} pitches</span>
+              <span>{preview.brand_cards.length} brands</span>
+              <span>{preview.channels.length} channels</span>
+            </div>
           </div>
         </div>
 
@@ -1094,7 +1366,12 @@ function Step3Preview(p: Step3Props) {
           <div className="cw-result-block">
             <span className="cw-result-block-h">Brands</span>
             <div className="cw-brand-cards">
-              {preview.brand_cards.map((bc) => (
+              {/* Cap to top BRAND_CARD_CAP cards (sorted most-recent-pitch
+                  first in buildBrandCards) + "+ N more" rollup. Scale guard
+                  per Founder direction 2026-06-02 — hundreds-of-brands case
+                  would otherwise blow out modal height. The full list still
+                  lives on the survivor's contact detail page post-merge. */}
+              {preview.brand_cards.slice(0, BRAND_CARD_CAP).map((bc) => (
                 <div
                   key={bc.brand_id}
                   className={`cw-brand-card ${bc.provenance !== 'survivor' ? 'is-pick' : ''}`}
@@ -1104,7 +1381,14 @@ function Step3Preview(p: Step3Props) {
                     <span className="cw-brand-card-meta">
                       {bc.role ?? 'no role'} ·{' '}
                       {bc.ended_at ? `ended ${formatDate(bc.ended_at)}` : 'active'}
-                      {bc.provenance === 'loser' && ' · from duplicate'}
+                      {bc.provenance === 'loser' && (
+                        <>
+                          {' '}
+                          <span className="cw-from-tag">
+                            from {p.loserDisplayName}
+                          </span>
+                        </>
+                      )}
                       {bc.provenance === 'merged' && ' · merged'}
                     </span>
                   </div>
@@ -1113,6 +1397,13 @@ function Step3Preview(p: Step3Props) {
                   </div>
                 </div>
               ))}
+              {preview.brand_cards.length > BRAND_CARD_CAP && (
+                <div className="cw-brand-cards-more">
+                  + {preview.brand_cards.length - BRAND_CARD_CAP} more brand{
+                    preview.brand_cards.length - BRAND_CARD_CAP === 1 ? '' : 's'
+                  } on the merged record
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1124,26 +1415,49 @@ function Step3Preview(p: Step3Props) {
               <span className="cw-result-block-h-tag">woven by date</span>
             </span>
             <div className="cw-history">
-              {preview.pitch_history.slice(0, 12).map((ph) => (
-                <div
-                  key={ph.pitch_id}
-                  className={`cw-history-row ${ph.from_loser ? 'is-from-loser' : ''}`}
-                >
-                  <span className="cw-history-date">{formatDate(ph.created_at)}</span>
-                  <span>
-                    {ph.brand_name ?? '(no brand)'}
-                    {ph.from_loser && <span className="cw-history-from">from dup</span>}
-                  </span>
-                  <span style={{ color: 'var(--ink-4)' }}>{ph.pitch_id.slice(0, 8)}</span>
-                </div>
-              ))}
-              {preview.pitch_history.length > 12 && (
-                <div className="cw-history-row">
-                  <span className="cw-history-date" />
-                  <span style={{ color: 'var(--ink-4)' }}>
-                    + {preview.pitch_history.length - 12} more
-                  </span>
-                  <span />
+              {/* 4-column row per canon: date · brand+summary+from-tag ·
+                  stage chip · amount. Cap at PITCH_HISTORY_CAP newest + rollup
+                  bounds modal height for hundred-pitch contacts. */}
+              {preview.pitch_history.slice(0, PITCH_HISTORY_CAP).map((ph) => {
+                const amount =
+                  ph.current_amount != null && ph.current_currency
+                    ? formatCurrencyAmount(ph.current_currency, ph.current_amount)
+                    : null
+                return (
+                  <div
+                    key={ph.pitch_id}
+                    className={`cw-history-row ${ph.from_loser ? 'is-from-loser' : ''}`}
+                  >
+                    <span className="cw-history-date">{shortDate(ph.created_at)}</span>
+                    <span className="cw-history-s">
+                      <span className="cw-history-s-text">
+                        {ph.brand_name ? <b>{ph.brand_name}</b> : <b>(no brand)</b>}
+                        {ph.summary && <> · {ph.summary}</>}
+                      </span>
+                      {ph.from_loser && (
+                        <span className="cw-from-tag">from {p.loserDisplayName}</span>
+                      )}
+                    </span>
+                    <span className="cw-history-stage">
+                      {ph.stage ? (
+                        <StageChip stage={ph.stage} direction={ph.direction} />
+                      ) : (
+                        <span className="cw-history-nodeal">No deal</span>
+                      )}
+                    </span>
+                    <span
+                      className={`cw-history-a${amount ? '' : ' is-muted'}`}
+                    >
+                      {amount ?? '—'}
+                    </span>
+                  </div>
+                )
+              })}
+              {preview.pitch_history.length > PITCH_HISTORY_CAP && (
+                <div className="cw-history-more">
+                  + {preview.pitch_history.length - PITCH_HISTORY_CAP} more pitch{
+                    preview.pitch_history.length - PITCH_HISTORY_CAP === 1 ? '' : 'es'
+                  } on the merged history
                 </div>
               )}
             </div>
@@ -1154,7 +1468,18 @@ function Step3Preview(p: Step3Props) {
       <div className="cw-confirm">
         <div className="cw-confirm-text">
           <span className="cw-confirm-dest">
-            Combine into <b>{p.keeperDisplayName ?? '(no name)'}</b>
+            Combine into{' '}
+            <span className="cw-confirm-name">
+              {p.keeperDisplayName ?? '(no name)'}
+            </span>
+            {p.keeperSlug && (
+              <>
+                {' '}
+                <span className="cw-confirm-keeps">
+                  · keeps <span className="cw-confirm-slug">/{p.keeperSlug}</span>
+                </span>
+              </>
+            )}
           </span>
           <span className="cw-confirm-undo">This can&rsquo;t be undone</span>
           {p.commitError && (
@@ -1180,18 +1505,28 @@ function Step3Preview(p: Step3Props) {
 
 interface Step4Props {
   keeperName: string
+  // Smoke fix 2026-06-02 — Step 4 success CTA is now a <Link> so middle-click /
+  // cmd-click / ctrl-click opens the keeper page in a new tab (browser-default
+  // anchor behavior). Plain left-click intercepts via onClick to fire the
+  // close animation + parent's success-close (which performs the in-app
+  // router.push). href is built from eff.keeper.slug (falls back to id);
+  // both shapes resolve at /app/people/[person]/page.tsx per FR-8 slug routing.
+  keeperHref: string
   loserName: string
   loserSlug: string | null
   pitchesCount: number
   channelsCount: number
-  onClose: () => void
+  // Per smoke fix 2026-06-02 §1 "Cancel button bug" — Step 4's "Open <keeper>"
+  // is the ONLY path that triggers parent navigation. Cancel/ESC/backdrop on
+  // earlier steps use the wizard's onClose (no nav).
+  onSuccessClose: () => void
 }
 
 function Step4Done(p: Step4Props) {
   return (
     <div className="cw-done">
       <span className="cw-done-stamp">✓ Combined</span>
-      <h2 className="cw-done-h1">One {p.keeperName}.</h2>
+      <h2 className="cw-done-h1">{p.keeperName}</h2>
       <p className="cw-done-body">
         <b>{p.pitchesCount}</b> pitches and <b>{p.channelsCount}</b> channels
         now live on a single record.
@@ -1203,9 +1538,19 @@ function Step4Done(p: Step4Props) {
           </>
         )}
       </p>
-      <button type="button" className="btn-pill" onClick={p.onClose}>
+      <Link
+        href={p.keeperHref}
+        className="btn-pill"
+        onClick={(e) => {
+          // Modifier-click / middle-click → let browser default open new tab.
+          // Plain left-click → intercept; close animation + parent nav handle it.
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+          e.preventDefault()
+          p.onSuccessClose()
+        }}
+      >
         Open {p.keeperName} →
-      </button>
+      </Link>
     </div>
   )
 }
@@ -1219,5 +1564,15 @@ function formatDate(iso: string): string {
   if (Number.isNaN(d.getTime())) return iso
   return d
     .toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    .toUpperCase()
+}
+
+// Short variant for Step-1 pitch preview rows — month + day, no year (canon
+// row format: `MAY 25` · `<brand> · <summary>` · `$1,400`).
+function shortDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d
+    .toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     .toUpperCase()
 }
