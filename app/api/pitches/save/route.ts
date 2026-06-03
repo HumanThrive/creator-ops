@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { generateBaseSlug, resolveSlugCollision } from '@/lib/slug'
 
 // FR-7 W66 — pitch save orchestration layer
 //
@@ -66,14 +67,30 @@ async function resolveBrand(
     .maybeSingle()
   if (existing) return existing.id
 
+  // New brand — assign a slug at create (AC-M2). Null base when the name doesn't
+  // slugify (all-punctuation / all-CJK) → slug stays NULL, the brand routes by
+  // uuid. Slug-gen is the single source in lib/slug.ts (shared with the backfill).
+  const slugExists = async (candidate: string): Promise<boolean> => {
+    const { data: hit } = await supabase
+      .from('brands')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('slug', candidate)
+      .maybeSingle()
+    return hit !== null
+  }
+  const base = generateBaseSlug(normalized)
+  const slug = base ? await resolveSlugCollision(base, slugExists) : null
+
   // Race-safe INSERT — fall back to re-SELECT on 23505
   const { data: inserted, error } = await supabase
     .from('brands')
-    .insert({ user_id: userId, name: normalized })
+    .insert({ user_id: userId, name: normalized, slug })
     .select('id')
     .single()
   if (error) {
     if (error.code === UNIQUE_VIOLATION) {
+      // Name race (common): the brand was created concurrently — reuse it.
       const { data: raced } = await supabase
         .from('brands')
         .select('id')
@@ -81,6 +98,18 @@ async function resolveBrand(
         .ilike('name', normalized)
         .maybeSingle()
       if (raced) return raced.id
+      // Slug race (rare): a different name resolved to the same slug between our
+      // probe and this insert — re-resolve against the now-taken slug, retry once.
+      if (base) {
+        const retrySlug = await resolveSlugCollision(base, slugExists)
+        const { data: retried, error: retryErr } = await supabase
+          .from('brands')
+          .insert({ user_id: userId, name: normalized, slug: retrySlug })
+          .select('id')
+          .single()
+        if (retryErr) throw retryErr
+        return retried.id
+      }
     }
     throw error
   }
