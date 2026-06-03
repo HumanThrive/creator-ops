@@ -9,7 +9,7 @@ import { BrandAssocReactivate } from '@/components/BrandAssocReactivate'
 import { PersonNameEditor } from '@/components/PersonNameEditor'
 import { ChannelsEditor } from '@/components/ChannelsEditor'
 import { ContactDeleteAction } from '@/components/ContactDeleteAction'
-import { brandSlug, formatCurrencyAmount } from '@/lib/pitch-stats'
+import { formatCurrencyAmount } from '@/lib/pitch-stats'
 import { formatFullDate, formatRelativeTime } from '@/lib/format'
 import type { Pitch } from '@/lib/types/pitch'
 import type { Deal, DealStage } from '@/lib/types/deal'
@@ -138,7 +138,7 @@ interface ContactBrandRow {
   role: string | null
   ended_at: string | null
   ended_reason: string | null
-  brands: { id: string; name: string } | null
+  brands: { id: string; name: string; slug: string | null } | null
 }
 
 export default async function ContactDetailPage({ params }: PersonPageProps) {
@@ -167,7 +167,7 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
   const [contactBrandsRes, contactPitchesRes] = await Promise.all([
     supabase
       .from('contact_brands')
-      .select('brand_id, role, ended_at, ended_reason, brands(id, name)')
+      .select('brand_id, role, ended_at, ended_reason, brands(id, name, slug)')
       .eq('contact_id', contactId),
     supabase
       .from('contact_pitches')
@@ -438,6 +438,7 @@ export default async function ContactDetailPage({ params }: PersonPageProps) {
                   contactName={displayName}
                   brandId={brand.id}
                   brandName={brand.name}
+                  slug={brand.slug}
                   role={(cb.role as ContactRole | null) ?? null}
                   pitches={brandPitches}
                   dealByPitchId={dealByPitchId}
@@ -514,6 +515,7 @@ interface BrandCardProps {
   contactName: string
   brandId: string
   brandName: string
+  slug: string | null
   role: ContactRole | null
   pitches: Pitch[]
   dealByPitchId: Map<string, Deal>
@@ -527,6 +529,7 @@ function BrandCard({
   contactName,
   brandId,
   brandName,
+  slug,
   role,
   pitches,
   dealByPitchId,
@@ -567,7 +570,7 @@ function BrandCard({
         <div className="brand-card-avatar">{initials(brandName)}</div>
         <div className="brand-card-id">
           <Link
-            href={`/app/brands/${brandSlug(brandName)}`}
+            href={`/app/brands/${slug ?? brandId}`}
             className="brand-card-name"
             style={{ textDecoration: 'none' }}
           >

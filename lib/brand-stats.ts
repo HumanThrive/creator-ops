@@ -122,3 +122,28 @@ export function computeBrandSummaries(
 
   return { known, unknown }
 }
+
+export interface BrandDetail {
+  pitches: Pitch[] // sorted desc by created_at
+  pitchCount: number
+  firstContactAt: string // ISO — oldest pitch
+  lastContactAt: string // ISO — most-recent pitch
+}
+
+// CR-7 S3 — detail aggregation for one brand's already-FK-filtered pitches
+// (loaded WHERE brand_id = X, or WHERE brand_id IS NULL for the Unknown bucket).
+// Returns null when there are no pitches (a 0-pitch brand reached by direct URL —
+// §F hides it from the list — or an empty Unknown bucket) so the page can bounce
+// to the list. Display name + isUnknown come from the page's canonical brand row.
+export function computeBrandDetail(pitches: Pitch[]): BrandDetail | null {
+  if (pitches.length === 0) return null
+  const sorted = [...pitches].sort((a, b) =>
+    a.created_at < b.created_at ? 1 : -1,
+  )
+  return {
+    pitches: sorted,
+    pitchCount: sorted.length,
+    firstContactAt: sorted[sorted.length - 1].created_at,
+    lastContactAt: sorted[0].created_at,
+  }
+}
