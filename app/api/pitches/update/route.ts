@@ -108,5 +108,25 @@ export async function POST(request: Request) {
     )
   }
 
+  // CR-7: update_pitch_with_activity uses brand_id = COALESCE(p_brand_id, brand_id),
+  // where null means "no change" — so the RPC alone can't clear the FK. Removing a
+  // brand cleared brand_name but left brand_id pointing at the old brand, so the
+  // pitch stayed under that brand on /app/brands (which keys on the canonical
+  // brand_id) instead of moving to (Unknown brand). When the brand name is cleared,
+  // explicitly NULL brand_id so "no brand name ⇒ no brand". Changing to a different
+  // brand keeps a non-empty brand_name, so this is a no-op on that path.
+  if (!body.brand_name?.trim()) {
+    const { error: clearBrandErr } = await supabase
+      .from('pitches')
+      .update({ brand_id: null })
+      .eq('id', body.pitch_id)
+    if (clearBrandErr) {
+      console.error(
+        '[api/pitches/update] brand_id clear failed:',
+        clearBrandErr.message,
+      )
+    }
+  }
+
   return Response.json({ success: true, data: rpcResult })
 }
