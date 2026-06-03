@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
+import { generateBaseSlug, resolveSlugCollision } from '@/lib/slug'
 import type { Pitch, PitchSourceChannel } from '@/lib/types/pitch'
 import { PITCH_SOURCE_CHANNELS } from '@/lib/types/pitch'
 import { formatSourceChannel } from '@/lib/format'
@@ -261,25 +262,64 @@ export function EditDetailsOverlay({
                       )
                       return
                     }
-                    // ON CONFLICT (user_id, lower(name)) DO NOTHING handles
-                    // the race where a parallel save just inserted the same
-                    // brand. Fall back to a re-SELECT on conflict.
+                    // CR-7: assign a slug at create (AC-M2). /api/pitches/update
+                    // is a forward-stub (no server resolution), so the edit
+                    // overlay creates the brand client-side — without this it
+                    // landed slug-less. Same single-source slug-gen + race
+                    // handling as the server resolveBrand path.
+                    const slugExists = async (
+                      candidate: string,
+                    ): Promise<boolean> => {
+                      const { data: hit } = await sb
+                        .from('brands')
+                        .select('id')
+                        .eq('user_id', currentUser.id)
+                        .eq('slug', candidate)
+                        .maybeSingle()
+                      return hit !== null
+                    }
+                    const base = generateBaseSlug(typed)
+                    const slug = base
+                      ? await resolveSlugCollision(base, slugExists)
+                      : null
+
                     const inserted = await sb
                       .from('brands')
-                      .insert({ user_id: currentUser.id, name: typed })
+                      .insert({ user_id: currentUser.id, name: typed, slug })
                       .select('id')
                       .single()
                     let newId: string | null = null
-                    if (inserted.error) {
+                    if (!inserted.error) {
+                      newId = (inserted.data as { id: string }).id
+                    } else {
+                      // Name race → existing brand (already slugged); reuse it.
                       const reread = await sb
                         .from('brands')
                         .select('id')
                         .eq('user_id', currentUser.id)
                         .ilike('name', typed)
                         .maybeSingle()
-                      newId = reread.data?.id ?? null
-                    } else {
-                      newId = (inserted.data as { id: string }).id
+                      if (reread.data) {
+                        newId = reread.data.id
+                      } else if (base) {
+                        // Slug race (different name, same slug) → re-resolve + retry once.
+                        const retrySlug = await resolveSlugCollision(
+                          base,
+                          slugExists,
+                        )
+                        const retry = await sb
+                          .from('brands')
+                          .insert({
+                            user_id: currentUser.id,
+                            name: typed,
+                            slug: retrySlug,
+                          })
+                          .select('id')
+                          .single()
+                        newId = retry.error
+                          ? null
+                          : (retry.data as { id: string }).id
+                      }
                     }
                     if (!newId) {
                       console.error(

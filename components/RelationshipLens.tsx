@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { brandSlug, formatCurrencyAmount } from '@/lib/pitch-stats'
+import { formatCurrencyAmount } from '@/lib/pitch-stats'
 import type { Pitch } from '@/lib/types/pitch'
 import type { Deal, DealStage } from '@/lib/types/deal'
 
@@ -61,6 +61,8 @@ interface LensData {
   cadence: ContactCadence | null
   outcomes: ContactOutcomes | null
   brandChain: BrandChainEntry[] | null
+  // CR-7 AC2.3: current Brand's slug for slug-first "View brand" routing.
+  brandSlugValue: string | null
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -289,8 +291,28 @@ export function RelationshipLens({ pitch }: RelationshipLensProps) {
           }))
       }
 
+      // CR-7 AC2.3: fetch the current Brand's slug so the "View brand" button
+      // targets the canonical slug (falls back to brand_id when slug is null).
+      let brandSlugValue: string | null = null
+      if (hasBrand && !cancelled) {
+        const brandRowRes = await supabase
+          .from('brands')
+          .select('slug')
+          .eq('id', pitch.brand_id!)
+          .maybeSingle()
+        brandSlugValue =
+          (brandRowRes.data as { slug: string | null } | null)?.slug ?? null
+      }
+
       if (!cancelled) {
-        setData({ brandHistory, otherContacts, cadence, outcomes, brandChain })
+        setData({
+          brandHistory,
+          otherContacts,
+          cadence,
+          outcomes,
+          brandChain,
+          brandSlugValue,
+        })
         setLoading(false)
       }
     }
@@ -428,12 +450,14 @@ export function RelationshipLens({ pitch }: RelationshipLensProps) {
           ) : null}
         </div>
         <div className="lens-nav">
-          {hasBrand && pitch.brand_name ? (
+          {hasBrand && pitch.brand_id ? (
             <button
               type="button"
               className="lens-nav-btn"
               onClick={() => {
-                router.push(`/app/brands/${brandSlug(pitch.brand_name!)}`)
+                router.push(
+                  `/app/brands/${data?.brandSlugValue ?? pitch.brand_id}`,
+                )
               }}
             >
               View {brandDisplayName} <span className="arr">↗</span>

@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import type { BrandSummary, CurrencyTotal } from '@/lib/pitch-stats'
-import { brandSlug, formatCurrencyAmount } from '@/lib/pitch-stats'
+import type { BrandSummary } from '@/lib/brand-stats'
+import type { CurrencyTotal } from '@/lib/pitch-stats'
+import { formatCurrencyAmount } from '@/lib/pitch-stats'
 import { formatRelativeTime } from '@/lib/format'
 
 type SortMode = 'recent' | 'value'
@@ -79,7 +80,7 @@ export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) 
 
       <div className="brand-list">
         {sortedKnown.map((b, i) => (
-          <BrandRow key={b.key} brand={b} rank={String(i + 1).padStart(2, '0')} />
+          <BrandRow key={b.routeSegment} brand={b} rank={String(i + 1).padStart(2, '0')} />
         ))}
         {unknown && <BrandRow brand={unknown} rank="—" />}
       </div>
@@ -95,7 +96,7 @@ function BrandRow({ brand, rank }: { brand: BrandSummary; rank: string }) {
       : 'Repeat customer'
 
   return (
-    <Link href={`/app/brands/${brandSlug(brand.displayName)}`} className="brand-row">
+    <Link href={`/app/brands/${brand.routeSegment}`} className="brand-row">
       <span className="brand-rank">{rank}</span>
       <div className="brand-name">
         <span className={`brand-name-t ${brand.isUnknown ? 'unknown' : ''}`}>

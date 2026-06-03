@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { BrandHistoryTable } from '@/components/BrandHistoryTable'
 import { BrandStatsStrip } from '@/components/BrandStatsStrip'
 import {
@@ -9,7 +10,7 @@ import {
   type BrandContactRow,
   type ContactRole,
 } from '@/components/BrandContactsTable'
-import { findBrandDetail } from '@/lib/pitch-stats'
+import { computeBrandDetail, UNKNOWN_BRAND_SLUG } from '@/lib/brand-stats'
 import { formatFullDate, formatRelativeTime } from '@/lib/format'
 import type { Pitch } from '@/lib/types/pitch'
 import type { Deal } from '@/lib/types/deal'
@@ -19,92 +20,158 @@ interface BrandDetailPageProps {
   params: Promise<{ brand: string }>
 }
 
+// uuid v4 detection — Postgres gen_random_uuid() shape (mirrors people/[person]).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+interface ResolvedBrand {
+  id: string
+  name: string
+  slug: string | null
+  previous_slugs: string[]
+}
+
+interface ContactBrandsJoinRow {
+  contact_id: string
+  role: string | null
+  contacts: {
+    id: string
+    display_name: string | null
+    channels: Array<{ kind: string; identifier: string; primary: boolean }>
+  } | null
+}
+
+// CR-7 S3 dual-route resolution (mirrors resolveContactByParam, FR-8 #75) plus
+// the legacy lower(name) tier brands need that contacts didn't: old
+// /app/brands/<encoded-name> URLs 301 to the canonical slug. Match order —
+//   uuid → current slug → previous_slugs (301) → legacy lower(name) (301).
+// `redirectTo` is non-null when the segment was a prior slug or a legacy name.
+async function resolveBrandByParam(
+  supabase: SupabaseClient,
+  param: string,
+): Promise<{ brand: ResolvedBrand | null; redirectTo: string | null }> {
+  const cols = 'id, name, slug, previous_slugs'
+
+  if (UUID_RE.test(param)) {
+    const { data } = await supabase
+      .from('brands')
+      .select(cols)
+      .eq('id', param)
+      .maybeSingle()
+    return { brand: (data as ResolvedBrand | null) ?? null, redirectTo: null }
+  }
+
+  // Current slug — canonical, no redirect.
+  const { data: slugMatch } = await supabase
+    .from('brands')
+    .select(cols)
+    .eq('slug', param)
+    .maybeSingle()
+  if (slugMatch) return { brand: slugMatch as ResolvedBrand, redirectTo: null }
+
+  // Prior slug → 301 to the current canonical slug.
+  const { data: prevMatch } = await supabase
+    .from('brands')
+    .select(cols)
+    .contains('previous_slugs', [param])
+    .maybeSingle()
+  if (prevMatch && (prevMatch as ResolvedBrand).slug) {
+    const m = prevMatch as ResolvedBrand
+    return { brand: m, redirectTo: `/app/brands/${m.slug}` }
+  }
+
+  // Legacy old URL: encodeURIComponent(name) → decode + case-insensitive name
+  // match (unique per user via brands_user_lower_name_uniq) → 301 to canonical.
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(param)
+  } catch {
+    return { brand: null, redirectTo: null }
+  }
+  const { data: nameMatch } = await supabase
+    .from('brands')
+    .select(cols)
+    .ilike('name', decoded)
+    .maybeSingle()
+  if (nameMatch) {
+    const m = nameMatch as ResolvedBrand
+    return { brand: m, redirectTo: `/app/brands/${m.slug ?? m.id}` }
+  }
+
+  return { brand: null, redirectTo: null }
+}
+
 export async function generateMetadata({
   params,
 }: BrandDetailPageProps): Promise<Metadata> {
-  const { brand: brandSlug } = await params
+  const { brand: param } = await params
+  if (param === UNKNOWN_BRAND_SLUG) return { title: '(Unknown brand)' }
   const supabase = await createClient()
-  const { data: pitches } = await supabase
-    .from('pitches')
-    .select('*')
-    .order('created_at', { ascending: false })
-  const detail = findBrandDetail((pitches ?? []) as Pitch[], [], brandSlug)
-  return {
-    title: detail ? detail.displayName : 'Brands',
-  }
+  const { brand } = await resolveBrandByParam(supabase, param)
+  return { title: brand ? brand.name : 'Brands' }
 }
 
 export default async function BrandDetailPage({ params }: BrandDetailPageProps) {
   const supabase = await createClient()
+  const { brand: param } = await params
 
-  const { brand: brandSlug } = await params
+  // ─── Resolve brand identity (CR-7: brand_id-canonical) ───────────────
+  let brandId: string | null
+  let displayName: string
+  let isUnknown: boolean
 
-  const [pitchesResult, allDealsResult] = await Promise.all([
-    supabase
-      .from('pitches')
-      .select('*')
-      .order('created_at', { ascending: false }),
-    supabase.from('deals').select('*'),
-  ])
-  const pitches = pitchesResult.data
-  const allDeals = (allDealsResult.data ?? []) as Deal[]
+  if (param === UNKNOWN_BRAND_SLUG) {
+    brandId = null
+    displayName = '(Unknown brand)'
+    isUnknown = true
+  } else {
+    const { brand, redirectTo } = await resolveBrandByParam(supabase, param)
+    if (redirectTo) redirect(redirectTo) // 301 prior-slug / legacy-name → canonical
+    if (!brand) redirect('/app/brands')
+    brandId = brand.id
+    displayName = brand.name
+    isUnknown = false
+  }
 
-  const detail = findBrandDetail(
-    (pitches ?? []) as Pitch[],
-    allDeals,
-    brandSlug,
-  )
+  // ─── Load this brand's pitches by FK (NULL brand_id for the Unknown bucket) ─
+  const baseQuery = supabase
+    .from('pitches')
+    .select('*')
+    .order('created_at', { ascending: false })
+  const { data: pitchData } = brandId
+    ? await baseQuery.eq('brand_id', brandId)
+    : await baseQuery.is('brand_id', null)
+
+  const detail = computeBrandDetail((pitchData ?? []) as Pitch[])
+  // 0-pitch brand reached by direct URL (orphan; §F hides it from the list) or
+  // an empty Unknown bucket → nothing to show; bounce to the list.
   if (!detail) redirect('/app/brands')
 
   const pitchIds = detail.pitches.map((p) => p.id)
 
-  // FR-7 W71: resolve brand_id from any backfilled pitch under this Brand.
-  // Migration 2 ensured every pre-FR-7 pitch carries brand_id; if no pitch
-  // in detail.pitches has brand_id, fall back to "no FR-7 surface" mode
-  // (still render the legacy history table; skip new strips).
-  const brandId =
-    detail.pitches.find((p) => p.brand_id !== null)?.brand_id ?? null
+  const [activitiesResult, tagsResult, allDealsResult, contactBrandsResult] =
+    await Promise.all([
+      supabase
+        .from('activities')
+        .select('*')
+        .in('pitch_id', pitchIds)
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('entity_tags')
+        .select('ref_id, tags(slug)')
+        .eq('ref_type', 'pitch')
+        .in('ref_id', pitchIds),
+      supabase.from('deals').select('*').in('pitch_id', pitchIds),
+      // contacts table keys on brand_id; the Unknown bucket has none.
+      brandId
+        ? supabase
+            .from('contact_brands')
+            .select('contact_id, role, contacts(id, display_name, channels)')
+            .eq('brand_id', brandId)
+            .is('ended_at', null)
+        : Promise.resolve({ data: [] as ContactBrandsJoinRow[], error: null }),
+    ])
 
-  const [activitiesResult, tagsResult, contactBrandsResult] = await Promise.all([
-    supabase
-      .from('activities')
-      .select('*')
-      .in('pitch_id', pitchIds)
-      .order('created_at', { ascending: true }),
-    supabase
-      .from('entity_tags')
-      .select('ref_id, tags(slug)')
-      .eq('ref_type', 'pitch')
-      .in('ref_id', pitchIds),
-    // FR-7 W71: contact_brands pivot rows + contacts JOIN for the contacts
-    // table. Joined contact row gives display_name + channels; pivot gives
-    // the per-Brand role enum. The join is RLS-safe per user_id denormalization
-    // on the pivot table.
-    // FR-8 #76 AC5.6: filter to active associations only (ended_at IS NULL) —
-    // ended associations excluded from the brand's "current Contacts" table.
-    brandId
-      ? supabase
-          .from('contact_brands')
-          .select('contact_id, role, contacts(id, display_name, channels)')
-          .eq('brand_id', brandId)
-          .is('ended_at', null)
-      : Promise.resolve({
-          data: [] as {
-            contact_id: string
-            role: string | null
-            contacts: {
-              id: string
-              display_name: string | null
-              channels: Array<{
-                kind: string
-                identifier: string
-                primary: boolean
-              }>
-            } | null
-          }[],
-          error: null,
-        }),
-  ])
+  const allDeals = (allDealsResult.data ?? []) as Deal[]
 
   const dealsByPitchId: Record<string, Deal | undefined> = {}
   for (const deal of allDeals) {
@@ -133,12 +200,9 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
   }
 
   // ─── FR-7 W71: BrandStatsStrip aggregations ────────────────────────
-  // Pitches = count of pitches under this brand (from detail).
-  // Closed total = SUM(current_budget_amount) over deals.stage='delivered'
-  //   for pitches under this brand. PL synthesis (handoff 2026-05-25 [11:13]):
-  //   single dominant currency only at v1 — pick the currency with the
-  //   largest delivered sum; show fallback "—" when there's no closed deal.
-  // Contacts = count of distinct contact_id in contact_brands under this brand.
+  // Closed total = SUM(current_budget_amount) over deals.stage='delivered' for
+  // pitches under this brand. Single dominant currency at v1 — pick the currency
+  // with the largest delivered sum; "—" fallback when there's no closed deal.
   let closedAccByCurrency = new Map<string, number>()
   let closedDealCount = 0
   let inFlightCount = 0
@@ -170,21 +234,8 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
     }
   }
 
-  const contactBrandsRows = (contactBrandsResult.data as
-    | {
-        contact_id: string
-        role: string | null
-        contacts: {
-          id: string
-          display_name: string | null
-          channels: Array<{
-            kind: string
-            identifier: string
-            primary: boolean
-          }>
-        } | null
-      }[]
-    | null) ?? []
+  const contactBrandsRows =
+    (contactBrandsResult.data as ContactBrandsJoinRow[] | null) ?? []
 
   const contactsCount = new Set(contactBrandsRows.map((r) => r.contact_id)).size
 
@@ -197,16 +248,9 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
   for (const [role, n] of Object.entries(roleCounts)) {
     rolePartsArr.push(`${n} ${role}`)
   }
-  const contactsSub = rolePartsArr.length > 0
-    ? rolePartsArr.join(' · ')
-    : null
+  const contactsSub = rolePartsArr.length > 0 ? rolePartsArr.join(' · ') : null
 
   // ─── FR-7 W71: BrandContactsTable per-row aggregations ─────────────
-  // For each contact_brands row, aggregate from the already-loaded
-  // detail.pitches + allDeals (no extra round trips). pitchesUnderBrand =
-  // pitches WHERE brand_id = X AND contact_id = Y. lastTouchDate = MAX of
-  // those pitches.created_at. lastCloseAmount/Currency/Date = most recent
-  // delivered deal for those pitches.
   const otherBrandsByContact = new Map<string, number>()
   if (contactBrandsRows.length > 0) {
     const contactIds = Array.from(
@@ -276,15 +320,12 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
     })
 
   const repeatLabel = detail.pitchCount === 1 ? '1st touch' : 'Repeat customer'
-  const kicker = detail.isUnknown
+  const kicker = isUnknown
     ? `Unknown sender · ${detail.pitchCount} ${detail.pitchCount === 1 ? 'pitch' : 'pitches'}`
     : `${repeatLabel} · since ${formatFullDate(detail.firstContactAt)}`
 
   const pitchesSubParts: string[] = []
-  if (closedDealCount > 0)
-    pitchesSubParts.push(
-      `${closedDealCount} closed`,
-    )
+  if (closedDealCount > 0) pitchesSubParts.push(`${closedDealCount} closed`)
   if (inFlightCount > 0) pitchesSubParts.push(`${inFlightCount} in flight`)
   if (declinedCount > 0) pitchesSubParts.push(`${declinedCount} declined`)
   const pitchesSub = pitchesSubParts.length > 0 ? pitchesSubParts.join(' · ') : null
@@ -298,13 +339,13 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
         <span className="sep">·</span>
         <span>Brands</span>
         <span className="sep">·</span>
-        <span className="here">{detail.displayName}</span>
+        <span className="here">{displayName}</span>
       </div>
     <div className="page">
       <div className="page-head">
         <div className="page-head-l">
           <span className="kicker">{kicker}</span>
-          <h1 className="page-h1">{detail.displayName}.</h1>
+          <h1 className="page-h1">{displayName}.</h1>
           <p className="page-sub">
             {detail.pitchCount} {detail.pitchCount === 1 ? 'pitch' : 'pitches'} · Last
             contact {formatRelativeTime(detail.lastContactAt)} · Tracked since{' '}
@@ -347,7 +388,7 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
         <BrandContactsTable
           rows={brandContactRows}
           brandId={brandId ?? ''}
-          brandName={detail.displayName}
+          brandName={displayName}
         />
       </section>
 

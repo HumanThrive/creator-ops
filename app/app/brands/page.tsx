@@ -2,7 +2,9 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { BrandsList } from '@/components/BrandsList'
 import { AddPitchTrigger } from '@/components/AddPitchTrigger'
-import { computeBrandSummaries, computePitchStats } from '@/lib/pitch-stats'
+import { computePitchStats } from '@/lib/pitch-stats'
+import { computeBrandSummaries } from '@/lib/brand-stats'
+import type { Brand } from '@/lib/types/brand'
 import type { Pitch } from '@/lib/types/pitch'
 import type { Deal } from '@/lib/types/deal'
 
@@ -13,7 +15,8 @@ export const metadata: Metadata = {
 export default async function BrandsPage() {
   const supabase = await createClient()
 
-  const [pitchesResult, dealsResult] = await Promise.all([
+  const [brandsResult, pitchesResult, dealsResult] = await Promise.all([
+    supabase.from('brands').select('*'),
     supabase
       .from('pitches')
       .select('*')
@@ -21,11 +24,12 @@ export default async function BrandsPage() {
     supabase.from('deals').select('*'),
   ])
 
+  const safeBrands = (brandsResult.data ?? []) as Brand[]
   const safePitches = (pitchesResult.data ?? []) as Pitch[]
   const safeDeals = (dealsResult.data ?? []) as Deal[]
   const stats = computePitchStats(safePitches, safeDeals)
-  const brands = computeBrandSummaries(safePitches, safeDeals)
-  const error = pitchesResult.error ?? dealsResult.error
+  const brands = computeBrandSummaries(safeBrands, safePitches, safeDeals)
+  const error = brandsResult.error ?? pitchesResult.error ?? dealsResult.error
 
   const isEmpty = brands.known.length === 0 && brands.unknown === null
 
@@ -34,7 +38,7 @@ export default async function BrandsPage() {
       <div className="page-head">
         <div className="page-head-l">
           <span className="kicker">
-            Your asset · {stats.brandCount} brands · {stats.pitchCount} pitches
+            Your asset · {brands.known.length} brands · {stats.pitchCount} pitches
           </span>
           <h1 className="page-h1">Brands.</h1>
           <p className="page-sub">
