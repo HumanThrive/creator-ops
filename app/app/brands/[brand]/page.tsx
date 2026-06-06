@@ -6,6 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { BrandHistoryTable } from '@/components/BrandHistoryTable'
 import { BrandStatsStrip } from '@/components/BrandStatsStrip'
 import { AddPitchTrigger } from '@/components/AddPitchTrigger'
+import { BrandNameEditor } from '@/components/BrandNameEditor'
 import {
   BrandContactsTable,
   type BrandContactRow,
@@ -120,8 +121,10 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
   let brandId: string | null
   let displayName: string
   let isUnknown: boolean
-  // Real brands only — the Unknown bucket never reaches the 0-pitch empty panel.
+  // Real brands only — the Unknown bucket never reaches the rename editor or the
+  // 0-pitch empty panel (it has no manageable identity).
   let brandCreatedAt = ''
+  let brandSlug: string | null = null
 
   if (param === UNKNOWN_BRAND_SLUG) {
     brandId = null
@@ -135,6 +138,7 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
     displayName = brand.name
     isUnknown = false
     brandCreatedAt = brand.created_at
+    brandSlug = brand.slug
   }
 
   // ─── Load this brand's pitches by FK (NULL brand_id for the Unknown bucket) ─
@@ -151,8 +155,15 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
   // empty-state panel (its rename/delete header rail lands in #91/#92). Only an
   // empty Unknown bucket still bounces.
   if (!detail) {
-    if (isUnknown) redirect('/app/brands')
-    return <BrandEmptyDetail displayName={displayName} createdAt={brandCreatedAt} />
+    if (brandId === null) redirect('/app/brands') // empty Unknown bucket
+    return (
+      <BrandEmptyDetail
+        brandId={brandId}
+        displayName={displayName}
+        currentSlug={brandSlug}
+        createdAt={brandCreatedAt}
+      />
+    )
   }
 
   const pitchIds = detail.pitches.map((p) => p.id)
@@ -212,7 +223,7 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
   // Closed total = SUM(current_budget_amount) over deals.stage='delivered' for
   // pitches under this brand. Single dominant currency at v1 — pick the currency
   // with the largest delivered sum; "—" fallback when there's no closed deal.
-  let closedAccByCurrency = new Map<string, number>()
+  const closedAccByCurrency = new Map<string, number>()
   let closedDealCount = 0
   let inFlightCount = 0
   let declinedCount = 0
@@ -354,7 +365,15 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
       <div className="page-head">
         <div className="page-head-l">
           <span className="kicker">{kicker}</span>
-          <h1 className="page-h1">{displayName}.</h1>
+          {brandId === null ? (
+            <h1 className="page-h1">{displayName}.</h1>
+          ) : (
+            <BrandNameEditor
+              brandId={brandId}
+              initialName={displayName}
+              currentSlug={brandSlug}
+            />
+          )}
           <p className="page-sub">
             {detail.pitchCount} {detail.pitchCount === 1 ? 'pitch' : 'pitches'} · Last
             contact {formatRelativeTime(detail.lastContactAt)} · Tracked since{' '}
@@ -431,10 +450,14 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
 // panel that teaches the next action. The page-head keeps the brand identity; the
 // rename/delete header rail is added by #91/#92.
 function BrandEmptyDetail({
+  brandId,
   displayName,
+  currentSlug,
   createdAt,
 }: {
+  brandId: string
   displayName: string
+  currentSlug: string | null
   createdAt: string
 }) {
   return (
@@ -454,7 +477,11 @@ function BrandEmptyDetail({
             <span className="kicker">
               Added {formatRelativeTime(createdAt)} &middot; no pitches yet
             </span>
-            <h1 className="page-h1">{displayName}.</h1>
+            <BrandNameEditor
+              brandId={brandId}
+              initialName={displayName}
+              currentSlug={currentSlug}
+            />
           </div>
         </div>
 

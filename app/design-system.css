@@ -1291,6 +1291,18 @@
 
 .brands-tools-r { display: flex; align-items: center; gap: 16px; }
 
+/* ── FR-11 #91 · inline brand rename (zero-shift) ── */
+.brand-h1-wrap { display: inline-flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.brand-h1 { outline: none; }
+.brand-h1.is-edit { border-bottom: 3px solid var(--accent); padding-bottom: 2px; }
+.brand-h1-dot { color: var(--accent); }
+.brand-h1-actions { display: inline-flex; align-items: center; gap: 8px; padding-bottom: 10px; }
+.brand-h1-callout { flex-basis: 100%; min-width: 0; }
+.brand-h1-err {
+  flex-basis: 100%; font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.04em; color: var(--accent);
+}
+
 /* /app/brands — mobile (container ≤720px) — card-stack reorg */
 @container app (max-width: 720px) {
   .brands-tools {
