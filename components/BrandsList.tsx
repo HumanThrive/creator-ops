@@ -6,6 +6,7 @@ import type { BrandSummary } from '@/lib/brand-stats'
 import type { CurrencyTotal } from '@/lib/pitch-stats'
 import { formatCurrencyAmount } from '@/lib/pitch-stats'
 import { formatRelativeTime } from '@/lib/format'
+import { NewBrandTrigger } from '@/components/NewBrandTrigger'
 
 type SortMode = 'recent' | 'value'
 
@@ -59,22 +60,25 @@ export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) 
             </>
           )}
         </span>
-        <div className="sort">
-          <span className="sort-l">Sort</span>
-          <button
-            type="button"
-            className={`sort-btn ${sort === 'recent' ? 'active' : ''}`}
-            onClick={() => setSort('recent')}
-          >
-            Recent
-          </button>
-          <button
-            type="button"
-            className={`sort-btn ${sort === 'value' ? 'active' : ''}`}
-            onClick={() => setSort('value')}
-          >
-            By value
-          </button>
+        <div className="brands-tools-r">
+          <div className="sort">
+            <span className="sort-l">Sort</span>
+            <button
+              type="button"
+              className={`sort-btn ${sort === 'recent' ? 'active' : ''}`}
+              onClick={() => setSort('recent')}
+            >
+              Recent
+            </button>
+            <button
+              type="button"
+              className={`sort-btn ${sort === 'value' ? 'active' : ''}`}
+              onClick={() => setSort('value')}
+            >
+              By value
+            </button>
+          </div>
+          <NewBrandTrigger />
         </div>
       </div>
 

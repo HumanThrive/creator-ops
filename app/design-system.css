@@ -141,6 +141,14 @@
   border-color: var(--ink);
   background: var(--paper-2);
 }
+/* FR-11 — dim/blocked variant: a save held back by a dup-name callout reads as
+   paused (dashed, muted), never a hard error. */
+.btn-pill.is-dim {
+  background: var(--paper); color: var(--ink-4);
+  border: 1px dashed var(--line-2); cursor: not-allowed;
+}
+.btn-pill.is-dim::before { background: var(--line-2); }
+.btn-pill.is-dim:hover { transform: none; }
 
 /* ─────────── Split-button (TopBar Add Pitch) ─────────── */
 
@@ -1235,6 +1243,54 @@
 }
 .empty-step b { color: var(--ink-3); font-weight: 500; }
 
+/* ── FR-11 #90 · create modal · dup callout · Combine stub ── */
+.brand-name-field-wrap { display: flex; flex-direction: column; gap: 8px; }
+.brand-name-field {
+  font-family: var(--display); font-weight: 400;
+  font-size: 40px; line-height: 1; letter-spacing: 0.005em;
+  text-transform: uppercase; color: var(--ink);
+  background: var(--paper); border: 1px solid var(--line-2);
+  border-radius: 5px; padding: 12px 16px; width: 100%;
+}
+.brand-name-field:focus { outline: none; border-color: var(--ink); }
+.brand-name-field.is-error { border-color: var(--accent); }
+.brand-name-field::placeholder { color: var(--ink-4); }
+.field-l {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.field-l::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.field-hint { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; color: var(--ink-4); line-height: 1.5; }
+.field-hint b { color: var(--ink-3); font-weight: 500; }
+
+.brand-combine-stub .modal-body { display: flex; flex-direction: column; gap: 14px; }
+.stub-card {
+  background: var(--paper); border: 1px dashed var(--line-2);
+  border-radius: 5px; padding: 22px 24px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.stub-tag {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-4);
+  border: 1px dashed var(--line-2); padding: 3px 9px; border-radius: 3px; width: fit-content;
+}
+.stub-h { font-family: var(--display); font-weight: 400; font-size: 30px; line-height: 0.95; letter-spacing: 0.005em; text-transform: uppercase; color: var(--ink); margin: 0; }
+.stub-h .dot { color: var(--accent); }
+.stub-p { font-family: var(--body); font-size: 14px; line-height: 1.55; color: var(--ink-3); margin: 0; }
+.stub-p b { color: var(--ink-2); font-weight: 600; }
+
+.change-block {
+  background: var(--paper-board); border: 1px solid var(--line-board);
+  border-radius: 5px; padding: 14px 18px; display: flex; flex-direction: column; gap: 9px;
+}
+.change-block-h { font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+.change-row { display: flex; align-items: baseline; gap: 10px; font-family: var(--body); font-size: 13.5px; color: var(--ink-2); }
+.change-row::before { content: "—"; color: var(--accent); font-family: var(--mono); }
+.change-row b { color: var(--ink); font-weight: 600; }
+
+.brands-tools-r { display: flex; align-items: center; gap: 16px; }
+
 /* /app/brands — mobile (container ≤720px) — card-stack reorg */
 @container app (max-width: 720px) {
   .brands-tools {
@@ -1245,6 +1301,8 @@
   .brands-count { text-align: left; }
   .sort { align-self: stretch; justify-content: space-between; padding: 4px; }
   .sort-btn { flex: 1; text-align: center; }
+  .brands-tools-r { flex-direction: column; align-items: stretch; gap: 10px; }
+  .brands-tools-r .btn-pill { justify-content: center; }
 
   .brand-list {
     border: none;
