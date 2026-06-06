@@ -27,7 +27,7 @@ export interface BrandSummary {
   displayName: string // brands.name (or '(Unknown brand)')
   isUnknown: boolean
   pitchCount: number
-  lastContactAt: string // ISO; most-recent pitch in this brand's group
+  lastContactAt: string // ISO; most-recent pitch, or brands.created_at for a 0-pitch brand
   currencyTotals: CurrencyTotal[] // sorted desc by amount
 }
 
@@ -65,8 +65,9 @@ function lastContactAt(pitches: Pitch[]): string {
 }
 
 // Build per-brand summaries from canonical `brands` rows + the user's pitches/deals.
-//   - Known brands: one row per `brands` row that has ≥1 pitch. §F: 0-pitch brands
-//     are HIDDEN (AC1.2) — the known orphans stay invisible exactly as today.
+//   - Known brands: one row per `brands` row. FR-11 AC1.3 shows ALL brands incl.
+//     0-pitch ones (the CR-7 §F hide is lifted) so created/empty brands are visible
+//     and manageable; a 0-pitch row carries counts=0 + created_at as its last touch.
 //   - Unknown bucket: NULL-brand_id pitches (≡ NULL brand_name; reconciliation
 //     verified clean V1=0) aggregate into the synthetic (Unknown brand) row (AC1.3).
 // Identity is brand_id, not text — no per-render text-grouping (AC1.4 / AC3.3).
@@ -92,8 +93,10 @@ export function computeBrandSummaries(
 
   const known: BrandSummary[] = []
   for (const brand of brands) {
-    const group = byBrandId.get(brand.id)
-    if (!group || group.length === 0) continue // §F: hide 0-pitch brands (AC1.2)
+    // FR-11 AC1.3: emit a row for every brand, incl. 0-pitch (CR-7 §F hide lifted).
+    // `lastContactAt(group)` reduces over group[0], so only call it when the group
+    // is non-empty; a 0-pitch brand falls back to brands.created_at.
+    const group = byBrandId.get(brand.id) ?? []
     known.push({
       brand_id: brand.id,
       slug: brand.slug,
@@ -101,8 +104,8 @@ export function computeBrandSummaries(
       displayName: brand.name,
       isUnknown: false,
       pitchCount: group.length,
-      lastContactAt: lastContactAt(group),
-      currencyTotals: currencyTotalsFor(group, dealMap),
+      lastContactAt: group.length > 0 ? lastContactAt(group) : brand.created_at,
+      currencyTotals: group.length > 0 ? currencyTotalsFor(group, dealMap) : [],
     })
   }
 
@@ -132,9 +135,10 @@ export interface BrandDetail {
 
 // CR-7 S3 — detail aggregation for one brand's already-FK-filtered pitches
 // (loaded WHERE brand_id = X, or WHERE brand_id IS NULL for the Unknown bucket).
-// Returns null when there are no pitches (a 0-pitch brand reached by direct URL —
-// §F hides it from the list — or an empty Unknown bucket) so the page can bounce
-// to the list. Display name + isUnknown come from the page's canonical brand row.
+// Returns null when there are no pitches. FR-11: a real 0-pitch brand is now a
+// valid destination — the page renders the empty-state panel instead of bouncing;
+// only an empty Unknown bucket still bounces. Display name + isUnknown come from
+// the page's canonical brand row.
 export function computeBrandDetail(pitches: Pitch[]): BrandDetail | null {
   if (pitches.length === 0) return null
   const sorted = [...pitches].sort((a, b) =>

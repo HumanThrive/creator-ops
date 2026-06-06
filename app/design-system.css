@@ -130,6 +130,18 @@
 }
 .btn-pill:hover { transform: translateY(-1px); }
 
+/* FR-11 — ghost variant (paper ground): "+ New Brand" pill + empty-panel
+   outbound CTA. Keeps the accent dot from the base ::before. */
+.btn-pill.is-ghost {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--line-2);
+}
+.btn-pill.is-ghost:hover {
+  border-color: var(--ink);
+  background: var(--paper-2);
+}
+
 /* ─────────── Split-button (TopBar Add Pitch) ─────────── */
 
 .btn-split {
@@ -1068,7 +1080,10 @@
 }
 .brand-row {
   display: grid;
-  grid-template-columns: 56px 1.6fr 1fr 1fr auto;
+  /* FR-11 AC-M3 — deterministic tracks (rank · name · pitches · last · total ·
+     arrow) so columns align across rows; the old content-sized fr/auto tracks
+     resolved per-row and drifted. .brand-total is a right-aligned block below. */
+  grid-template-columns: 48px minmax(0, 1fr) 116px 116px 160px 18px;
   align-items: center;
   gap: 16px;
   padding: 18px 24px;
@@ -1128,6 +1143,8 @@
   text-transform: uppercase;
   text-align: right;
   color: var(--ink);
+  display: block; /* AC-M3 — fill the fixed total track + right-align */
+  width: 100%;
 }
 .brand-total sup {
   font-family: var(--mono);
@@ -1165,6 +1182,58 @@
 }
 
 .brand-row-divider { display: none; }
+
+/* ── FR-11 · 0-pitch "Ready" brand row (Direction A · dashed marker) ── */
+.brand-row.is-fresh-a .brand-rank { color: var(--accent); }
+.brand-row.is-fresh-a .brand-name-t {
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.fresh-tag {
+  font-family: var(--mono); font-size: 8.5px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent);
+  border: 1px dashed var(--accent); padding: 2px 7px; border-radius: 3px;
+  white-space: nowrap;
+}
+.brand-fresh-cta {
+  grid-column: 3 / 5; justify-self: start; min-width: 0;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
+  color: var(--ink-4); display: inline-flex; align-items: center; gap: 8px;
+}
+.brand-fresh-cta em { color: var(--ink-3); font-style: italic; letter-spacing: 0.02em; }
+
+/* ── FR-11 · 0-pitch brand detail empty panel (design Ask 03) ── */
+.empty-panel {
+  background: var(--paper-board); border: 1px dashed var(--line-2);
+  border-radius: 6px; padding: 44px 40px;
+  display: flex; flex-direction: column; gap: 18px; align-items: flex-start;
+}
+.empty-panel-kicker {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.empty-panel-kicker::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+}
+.empty-panel-h {
+  font-family: var(--display); font-weight: 400; font-size: 40px;
+  line-height: 0.95; letter-spacing: 0.005em; text-transform: uppercase;
+  color: var(--ink); margin: 0; max-width: 18ch;
+}
+.empty-panel-h .dot { color: var(--accent); }
+.empty-panel-p {
+  font-family: var(--body); font-size: 15px; line-height: 1.6;
+  color: var(--ink-3); margin: 0; max-width: 56ch;
+}
+.empty-panel-p b { color: var(--ink); font-weight: 600; }
+.empty-panel-cta-row { display: flex; gap: 10px; flex-wrap: wrap; padding-top: 4px; }
+.empty-panel-steps { display: flex; gap: 12px; flex-wrap: wrap; padding-top: 4px; }
+.empty-step {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.10em;
+  text-transform: uppercase; color: var(--ink-4);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.empty-step b { color: var(--ink-3); font-weight: 500; }
 
 /* /app/brands — mobile (container ≤720px) — card-stack reorg */
 @container app (max-width: 720px) {
@@ -1212,6 +1281,9 @@
   }
   .brand-name-t { font-size: 22px; }
   .brand-name-sub { display: none; }
+  /* FR-11 — the fresh-row hint hides on mobile; the Ready tag in the name +
+     the muted "No pitches" total carry the 0-pitch signal in the card. */
+  .brand-fresh-cta { display: none; }
 
   .brand-last {
     grid-area: last;

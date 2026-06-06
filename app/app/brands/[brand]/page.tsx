@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { BrandHistoryTable } from '@/components/BrandHistoryTable'
 import { BrandStatsStrip } from '@/components/BrandStatsStrip'
+import { AddPitchTrigger } from '@/components/AddPitchTrigger'
 import {
   BrandContactsTable,
   type BrandContactRow,
@@ -28,6 +29,7 @@ interface ResolvedBrand {
   name: string
   slug: string | null
   previous_slugs: string[]
+  created_at: string
 }
 
 interface ContactBrandsJoinRow {
@@ -49,7 +51,7 @@ async function resolveBrandByParam(
   supabase: SupabaseClient,
   param: string,
 ): Promise<{ brand: ResolvedBrand | null; redirectTo: string | null }> {
-  const cols = 'id, name, slug, previous_slugs'
+  const cols = 'id, name, slug, previous_slugs, created_at'
 
   if (UUID_RE.test(param)) {
     const { data } = await supabase
@@ -118,6 +120,8 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
   let brandId: string | null
   let displayName: string
   let isUnknown: boolean
+  // Real brands only — the Unknown bucket never reaches the 0-pitch empty panel.
+  let brandCreatedAt = ''
 
   if (param === UNKNOWN_BRAND_SLUG) {
     brandId = null
@@ -130,6 +134,7 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
     brandId = brand.id
     displayName = brand.name
     isUnknown = false
+    brandCreatedAt = brand.created_at
   }
 
   // ─── Load this brand's pitches by FK (NULL brand_id for the Unknown bucket) ─
@@ -142,9 +147,13 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
     : await baseQuery.is('brand_id', null)
 
   const detail = computeBrandDetail((pitchData ?? []) as Pitch[])
-  // 0-pitch brand reached by direct URL (orphan; §F hides it from the list) or
-  // an empty Unknown bucket → nothing to show; bounce to the list.
-  if (!detail) redirect('/app/brands')
+  // FR-11 AC1.4 — a real 0-pitch brand is a valid destination: render the
+  // empty-state panel (its rename/delete header rail lands in #91/#92). Only an
+  // empty Unknown bucket still bounces.
+  if (!detail) {
+    if (isUnknown) redirect('/app/brands')
+    return <BrandEmptyDetail displayName={displayName} createdAt={brandCreatedAt} />
+  }
 
   const pitchIds = detail.pitches.map((p) => p.id)
 
@@ -412,6 +421,70 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
         />
       </section>
     </div>
+    </>
+  )
+}
+
+// FR-11 AC1.4 — the 0-pitch brand detail (design Ask 03 "inviting empty panel").
+// Normally the StatsStrip + History + Contacts tables carry this page; with zero
+// pitches there's nothing to fill them, so the body collapses to one dashed-slate
+// panel that teaches the next action. The page-head keeps the brand identity; the
+// rename/delete header rail is added by #91/#92.
+function BrandEmptyDetail({
+  displayName,
+  createdAt,
+}: {
+  displayName: string
+  createdAt: string
+}) {
+  return (
+    <>
+      <div className="subnav">
+        <Link href="/app/brands" className="back">
+          <span>←</span>Back to Brands
+        </Link>
+        <span className="sep">·</span>
+        <span>Brands</span>
+        <span className="sep">·</span>
+        <span className="here">{displayName}</span>
+      </div>
+      <div className="page">
+        <div className="page-head">
+          <div className="page-head-l">
+            <span className="kicker">
+              Added {formatRelativeTime(createdAt)} &middot; no pitches yet
+            </span>
+            <h1 className="page-h1">{displayName}.</h1>
+          </div>
+        </div>
+
+        <div className="empty-panel">
+          <span className="empty-panel-kicker">No pitches yet</span>
+          <h2 className="empty-panel-h">
+            Ready for its first pitch<span className="dot">.</span>
+          </h2>
+          <p className="empty-panel-p">
+            <b>{displayName}</b> is on your board, but nothing&rsquo;s tracked
+            against it yet. Paste a brand-deal message &mdash; received or sent
+            &mdash; and the AI extracts the budget, deliverables and deal terms,
+            then files them here. Stats and history fill in from the first pitch.
+          </p>
+          <div className="empty-panel-cta-row">
+            <AddPitchTrigger className="btn-pill" label="Paste a pitch ↘" />
+            <AddPitchTrigger
+              className="btn-pill is-ghost"
+              label="Log an outbound pitch ↗"
+            />
+          </div>
+          <div className="empty-panel-steps">
+            <span className="empty-step">
+              <b>Next</b> &middot; pitch lands here
+            </span>
+            <span className="empty-step">&rarr; stats fill in</span>
+            <span className="empty-step">&rarr; contacts link automatically</span>
+          </div>
+        </div>
+      </div>
     </>
   )
 }

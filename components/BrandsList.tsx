@@ -89,6 +89,36 @@ export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) 
 }
 
 function BrandRow({ brand, rank }: { brand: BrandSummary; rank: string }) {
+  // FR-11 AC1.3 — 0-pitch "Ready" row (Direction A · dashed marker). A real brand
+  // with no pitches yet (just created, or emptied) reads as ready-to-track, not
+  // broken: dashed Ready tag beside the name + a single next-step hint spanning
+  // the data columns + a muted "No pitches" total. Same height/grid as populated.
+  if (brand.pitchCount === 0 && !brand.isUnknown) {
+    return (
+      <Link
+        href={`/app/brands/${brand.routeSegment}`}
+        className="brand-row is-fresh-a"
+      >
+        <span className="brand-rank">{rank}</span>
+        <div className="brand-name">
+          <span className="brand-name-t">
+            {brand.displayName}
+            <span className="fresh-tag">Ready</span>
+          </span>
+          <span className="brand-name-sub">
+            Added {formatRelativeTime(brand.lastContactAt)} &middot; no pitches yet
+          </span>
+        </div>
+        <span className="brand-fresh-cta">
+          &rarr; <em>Paste its first pitch to start tracking</em>
+        </span>
+        <span className="brand-total muted">No pitches</span>
+        <span className="brand-arrow">&rarr;</span>
+        <span className="brand-row-divider" aria-hidden="true" />
+      </Link>
+    )
+  }
+
   const sub = brand.isUnknown
     ? `No brand extracted · ${brand.pitchCount} ${brand.pitchCount === 1 ? 'pitch' : 'pitches'}`
     : brand.pitchCount === 1
