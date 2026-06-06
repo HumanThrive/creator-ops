@@ -7,12 +7,14 @@ import { BrandHistoryTable } from '@/components/BrandHistoryTable'
 import { BrandStatsStrip } from '@/components/BrandStatsStrip'
 import { AddPitchTrigger } from '@/components/AddPitchTrigger'
 import { BrandNameEditor } from '@/components/BrandNameEditor'
+import { BrandDeleteAction } from '@/components/BrandDeleteAction'
 import {
   BrandContactsTable,
   type BrandContactRow,
   type ContactRole,
 } from '@/components/BrandContactsTable'
 import { computeBrandDetail, UNKNOWN_BRAND_SLUG } from '@/lib/brand-stats'
+import { effectiveBudget, formatCurrencyAmount } from '@/lib/pitch-stats'
 import { formatFullDate, formatRelativeTime } from '@/lib/format'
 import type { Pitch } from '@/lib/types/pitch'
 import type { Deal } from '@/lib/types/deal'
@@ -350,6 +352,20 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
   if (declinedCount > 0) pitchesSubParts.push(`${declinedCount} declined`)
   const pitchesSub = pitchesSubParts.length > 0 ? pitchesSubParts.join(' · ') : null
 
+  // FR-11 #92 — top-3 anchoring pitches for the blocked-delete modal (the brand
+  // has pitch history → delete is blocked; show what's anchoring it).
+  const recentPitches = detail.pitches.slice(0, 3).map((p) => {
+    const eff = effectiveBudget(p, dealsByPitchId[p.id])
+    return {
+      id: p.id,
+      date: formatFullDate(p.created_at),
+      summary: p.ai_summary ?? p.brand_name ?? '—',
+      amount: eff
+        ? `${formatCurrencyAmount(eff.currency, eff.amount)} ${eff.currency}`
+        : null,
+    }
+  })
+
   return (
     <>
       <div className="subnav">
@@ -368,11 +384,20 @@ export default async function BrandDetailPage({ params }: BrandDetailPageProps) 
           {brandId === null ? (
             <h1 className="page-h1">{displayName}.</h1>
           ) : (
-            <BrandNameEditor
-              brandId={brandId}
-              initialName={displayName}
-              currentSlug={brandSlug}
-            />
+            <div className="brand-head-rail">
+              <BrandNameEditor
+                brandId={brandId}
+                initialName={displayName}
+                currentSlug={brandSlug}
+              />
+              <BrandDeleteAction
+                brandId={brandId}
+                brandName={displayName}
+                brandSlug={brandSlug}
+                pitchCount={detail.pitchCount}
+                recentPitches={recentPitches}
+              />
+            </div>
           )}
           <p className="page-sub">
             {detail.pitchCount} {detail.pitchCount === 1 ? 'pitch' : 'pitches'} · Last
@@ -477,11 +502,20 @@ function BrandEmptyDetail({
             <span className="kicker">
               Added {formatRelativeTime(createdAt)} &middot; no pitches yet
             </span>
-            <BrandNameEditor
-              brandId={brandId}
-              initialName={displayName}
-              currentSlug={currentSlug}
-            />
+            <div className="brand-head-rail">
+              <BrandNameEditor
+                brandId={brandId}
+                initialName={displayName}
+                currentSlug={currentSlug}
+              />
+              <BrandDeleteAction
+                brandId={brandId}
+                brandName={displayName}
+                brandSlug={currentSlug}
+                pitchCount={0}
+                recentPitches={[]}
+              />
+            </div>
           </div>
         </div>
 

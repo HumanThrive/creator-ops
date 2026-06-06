@@ -1303,6 +1303,41 @@
   letter-spacing: 0.04em; color: var(--accent);
 }
 
+/* ── FR-11 #92 · delete (header rail + ✕ trigger; modals reuse FR-8 chrome) ── */
+.brand-head-rail { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.brand-del { display: inline-flex; align-items: center; gap: 10px; padding-bottom: 10px; }
+.bd-del-btn {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  background: var(--paper); border: 1px solid var(--line-2); color: var(--ink-4);
+  padding: 6px 12px; border-radius: 999px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.bd-del-btn:hover { border-color: var(--accent); color: var(--accent); }
+.bd-del-btn:disabled { opacity: 0.5; cursor: default; }
+.brand-del-err { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em; color: var(--accent); }
+
+/* Clean-delete Undo toast — fixed, bottom-center over the list (design Ask 06). */
+.toast-host { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 60; }
+.toast {
+  background: var(--ink); color: var(--paper);
+  border-radius: 6px; padding: 12px 14px 12px 18px;
+  display: inline-flex; align-items: center; gap: 16px;
+  box-shadow: 0 12px 28px -8px rgba(10, 14, 28, 0.40);
+  font-family: var(--body); font-size: 13.5px; font-weight: 500;
+}
+.toast-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
+.toast-msg b { font-weight: 700; }
+.toast-undo {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--paper);
+  background: transparent; border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 5px 11px; border-radius: 999px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.toast-undo:hover { border-color: var(--accent); }
+.toast-timer { font-family: var(--mono); font-size: 10px; letter-spacing: 0.10em; color: rgba(255, 255, 255, 0.5); }
+
 /* /app/brands — mobile (container ≤720px) — card-stack reorg */
 @container app (max-width: 720px) {
   .brands-tools {

@@ -1,12 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { BrandSummary } from '@/lib/brand-stats'
 import type { CurrencyTotal } from '@/lib/pitch-stats'
 import { formatCurrencyAmount } from '@/lib/pitch-stats'
 import { formatRelativeTime } from '@/lib/format'
 import { NewBrandTrigger } from '@/components/NewBrandTrigger'
+import { BrandDeleteToast } from '@/components/BrandDeleteToast'
+
+const PENDING_DELETE_KEY = 'pendingBrandDelete'
 
 type SortMode = 'recent' | 'value'
 
@@ -35,6 +38,28 @@ function trackedSummary(currencyTotals: CurrencyTotal[]): string | null {
 
 export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) {
   const [sort, setSort] = useState<SortMode>('recent')
+  // FR-11 #92 — a clean delete from a detail page hands off here via
+  // sessionStorage; hide the row optimistically + mount the 5s Undo toast (which
+  // fires the real DELETE, or cancels it on Undo / unmount).
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(
+    null,
+  )
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem(PENDING_DELETE_KEY)
+    if (!raw) return
+    sessionStorage.removeItem(PENDING_DELETE_KEY)
+    try {
+      const parsed = JSON.parse(raw) as { id: string; name: string }
+      // One-shot post-hydration consume of the cross-navigation hand-off. Can't
+      // be a lazy useState initializer (sessionStorage is undefined during SSR);
+      // fires once on mount, no cascade — the rule's perf concern doesn't apply.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (parsed?.id) setPendingDelete(parsed)
+    } catch {
+      /* ignore malformed hand-off */
+    }
+  }, [])
 
   const sortedKnown = [...known].sort((a, b) => {
     if (sort === 'value') {
@@ -45,7 +70,11 @@ export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) 
     return a.lastContactAt < b.lastContactAt ? 1 : -1
   })
 
-  const totalBrandCount = known.length + (unknown ? 1 : 0)
+  const visibleKnown = pendingDelete
+    ? sortedKnown.filter((b) => b.brand_id !== pendingDelete.id)
+    : sortedKnown
+
+  const totalBrandCount = visibleKnown.length + (unknown ? 1 : 0)
   const tracked = trackedSummary(currencyTotals)
 
   return (
@@ -83,11 +112,18 @@ export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) 
       </div>
 
       <div className="brand-list">
-        {sortedKnown.map((b, i) => (
+        {visibleKnown.map((b, i) => (
           <BrandRow key={b.routeSegment} brand={b} rank={String(i + 1).padStart(2, '0')} />
         ))}
         {unknown && <BrandRow brand={unknown} rank="—" />}
       </div>
+      {pendingDelete ? (
+        <BrandDeleteToast
+          brandId={pendingDelete.id}
+          brandName={pendingDelete.name}
+          onDone={() => setPendingDelete(null)}
+        />
+      ) : null}
     </>
   )
 }
