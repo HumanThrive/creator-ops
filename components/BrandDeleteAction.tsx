@@ -10,14 +10,16 @@ import {
   BrandUnlinkConfirmModal,
   type AffectedContact,
 } from '@/components/BrandUnlinkConfirmModal'
+import { BrandDeleteConfirmModal } from '@/components/BrandDeleteConfirmModal'
 
 // FR-11 #92 (Story 3) — the ✕ Delete brand affordance on the brand detail header
 // rail. Preflights (?check_only=1) then branches on what's anchored:
 //   pitch_count > 0                      → blocked modal (Cancel only)
 //   pitch_count 0, contact_link_count >0 → contact-unlink confirm → delete
-//   pitch_count 0, contact_link_count  0 → clean: optimistic-defer Undo toast
-//                                          (stash + route to the list; the real
-//                                           DELETE fires there — BrandDeleteToast)
+//   pitch_count 0, contact_link_count  0 → clean: confirm gate (accidental-click
+//                                          guard) → optimistic-defer Undo toast
+//                                          (stash + route; the real DELETE fires
+//                                           on the list — BrandDeleteToast)
 //
 // recentPitches (≤3) come pre-computed from the populated detail page for the
 // blocked modal; on the 0-pitch empty detail they're [] (blocked can't fire).
@@ -37,6 +39,7 @@ type Status =
   | { kind: 'checking' }
   | { kind: 'blocked'; pitchCount: number; brandName: string }
   | { kind: 'unlinkConfirm'; contactLinkCount: number; affected: AffectedContact[] }
+  | { kind: 'cleanConfirm' }
   | { kind: 'deleting' }
   | { kind: 'error'; message: string }
 
@@ -74,7 +77,9 @@ export function BrandDeleteAction({
           affected: (body.affected_contacts as AffectedContact[]) ?? [],
         })
       } else {
-        commitClean()
+        // Clean (0 pitches, 0 contacts): interpose the accidental-click confirm
+        // before the optimistic-defer flow. The 5s Undo toast still follows.
+        setStatus({ kind: 'cleanConfirm' })
       }
     } catch (err) {
       setStatus({ kind: 'error', message: (err as Error).message })
@@ -150,6 +155,14 @@ export function BrandDeleteAction({
           affected={status.affected}
           onCancel={() => setStatus({ kind: 'idle' })}
           onConfirm={onUnlinkConfirm}
+        />
+      ) : null}
+
+      {status.kind === 'cleanConfirm' ? (
+        <BrandDeleteConfirmModal
+          brandName={brandName}
+          onCancel={() => setStatus({ kind: 'idle' })}
+          onConfirm={commitClean}
         />
       ) : null}
     </div>

@@ -1153,6 +1153,12 @@
   color: var(--ink);
   display: block; /* AC-M3 — fill the fixed total track + right-align */
   width: 100%;
+  /* AC-M3 — a grid item's auto-minimum (min-width:auto = min-content) lets a
+     wide value like "$128,000" inflate the cell past the 160px track, so totals
+     stop right-aligning row-to-row. Pin the cell to the track; the value
+     overflows left instead. (The design wraps the total in a <div> for the same
+     effect — a %-width child doesn't propagate min-content to the cell.) */
+  min-width: 0;
 }
 .brand-total sup {
   font-family: var(--mono);
