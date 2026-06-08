@@ -130,6 +130,26 @@
 }
 .btn-pill:hover { transform: translateY(-1px); }
 
+/* FR-11 — ghost variant (paper ground): "+ New Brand" pill + empty-panel
+   outbound CTA. Keeps the accent dot from the base ::before. */
+.btn-pill.is-ghost {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--line-2);
+}
+.btn-pill.is-ghost:hover {
+  border-color: var(--ink);
+  background: var(--paper-2);
+}
+/* FR-11 — dim/blocked variant: a save held back by a dup-name callout reads as
+   paused (dashed, muted), never a hard error. */
+.btn-pill.is-dim {
+  background: var(--paper); color: var(--ink-4);
+  border: 1px dashed var(--line-2); cursor: not-allowed;
+}
+.btn-pill.is-dim::before { background: var(--line-2); }
+.btn-pill.is-dim:hover { transform: none; }
+
 /* ─────────── Split-button (TopBar Add Pitch) ─────────── */
 
 .btn-split {
@@ -1068,7 +1088,10 @@
 }
 .brand-row {
   display: grid;
-  grid-template-columns: 56px 1.6fr 1fr 1fr auto;
+  /* FR-11 AC-M3 — deterministic tracks (rank · name · pitches · last · total ·
+     arrow) so columns align across rows; the old content-sized fr/auto tracks
+     resolved per-row and drifted. .brand-total is a right-aligned block below. */
+  grid-template-columns: 48px minmax(0, 1fr) 116px 116px 160px 18px;
   align-items: center;
   gap: 16px;
   padding: 18px 24px;
@@ -1128,6 +1151,14 @@
   text-transform: uppercase;
   text-align: right;
   color: var(--ink);
+  display: block; /* AC-M3 — fill the fixed total track + right-align */
+  width: 100%;
+  /* AC-M3 — a grid item's auto-minimum (min-width:auto = min-content) lets a
+     wide value like "$128,000" inflate the cell past the 160px track, so totals
+     stop right-aligning row-to-row. Pin the cell to the track; the value
+     overflows left instead. (The design wraps the total in a <div> for the same
+     effect — a %-width child doesn't propagate min-content to the cell.) */
+  min-width: 0;
 }
 .brand-total sup {
   font-family: var(--mono);
@@ -1166,6 +1197,153 @@
 
 .brand-row-divider { display: none; }
 
+/* ── FR-11 · 0-pitch "Ready" brand row (Direction A · dashed marker) ── */
+.brand-row.is-fresh-a .brand-rank { color: var(--accent); }
+.brand-row.is-fresh-a .brand-name-t {
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.fresh-tag {
+  font-family: var(--mono); font-size: 8.5px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent);
+  border: 1px dashed var(--accent); padding: 2px 7px; border-radius: 3px;
+  white-space: nowrap;
+}
+.brand-fresh-cta {
+  grid-column: 3 / 5; justify-self: start; min-width: 0;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
+  color: var(--ink-4); display: inline-flex; align-items: center; gap: 8px;
+}
+.brand-fresh-cta em { color: var(--ink-3); font-style: italic; letter-spacing: 0.02em; }
+
+/* ── FR-11 · 0-pitch brand detail empty panel (design Ask 03) ── */
+.empty-panel {
+  background: var(--paper-board); border: 1px dashed var(--line-2);
+  border-radius: 6px; padding: 44px 40px;
+  display: flex; flex-direction: column; gap: 18px; align-items: flex-start;
+}
+.empty-panel-kicker {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.empty-panel-kicker::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+}
+.empty-panel-h {
+  font-family: var(--display); font-weight: 400; font-size: 40px;
+  line-height: 0.95; letter-spacing: 0.005em; text-transform: uppercase;
+  color: var(--ink); margin: 0; max-width: 18ch;
+}
+.empty-panel-h .dot { color: var(--accent); }
+.empty-panel-p {
+  font-family: var(--body); font-size: 15px; line-height: 1.6;
+  color: var(--ink-3); margin: 0; max-width: 56ch;
+}
+.empty-panel-p b { color: var(--ink); font-weight: 600; }
+.empty-panel-cta-row { display: flex; gap: 10px; flex-wrap: wrap; padding-top: 4px; }
+.empty-panel-steps { display: flex; gap: 12px; flex-wrap: wrap; padding-top: 4px; }
+.empty-step {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.10em;
+  text-transform: uppercase; color: var(--ink-4);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.empty-step b { color: var(--ink-3); font-weight: 500; }
+
+/* ── FR-11 #90 · create modal · dup callout · Combine stub ── */
+.brand-name-field-wrap { display: flex; flex-direction: column; gap: 8px; }
+.brand-name-field {
+  font-family: var(--display); font-weight: 400;
+  font-size: 40px; line-height: 1; letter-spacing: 0.005em;
+  text-transform: uppercase; color: var(--ink);
+  background: var(--paper); border: 1px solid var(--line-2);
+  border-radius: 5px; padding: 12px 16px; width: 100%;
+}
+.brand-name-field:focus { outline: none; border-color: var(--ink); }
+.brand-name-field.is-error { border-color: var(--accent); }
+.brand-name-field::placeholder { color: var(--ink-4); }
+.field-l {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.field-l::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.field-hint { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; color: var(--ink-4); line-height: 1.5; }
+.field-hint b { color: var(--ink-3); font-weight: 500; }
+
+.brand-combine-stub .modal-body { display: flex; flex-direction: column; gap: 14px; }
+.stub-card {
+  background: var(--paper); border: 1px dashed var(--line-2);
+  border-radius: 5px; padding: 22px 24px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.stub-tag {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-4);
+  border: 1px dashed var(--line-2); padding: 3px 9px; border-radius: 3px; width: fit-content;
+}
+.stub-h { font-family: var(--display); font-weight: 400; font-size: 30px; line-height: 0.95; letter-spacing: 0.005em; text-transform: uppercase; color: var(--ink); margin: 0; }
+.stub-h .dot { color: var(--accent); }
+.stub-p { font-family: var(--body); font-size: 14px; line-height: 1.55; color: var(--ink-3); margin: 0; }
+.stub-p b { color: var(--ink-2); font-weight: 600; }
+
+.change-block {
+  background: var(--paper-board); border: 1px solid var(--line-board);
+  border-radius: 5px; padding: 14px 18px; display: flex; flex-direction: column; gap: 9px;
+}
+.change-block-h { font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+.change-row { display: flex; align-items: baseline; gap: 10px; font-family: var(--body); font-size: 13.5px; color: var(--ink-2); }
+.change-row::before { content: "—"; color: var(--accent); font-family: var(--mono); }
+.change-row b { color: var(--ink); font-weight: 600; }
+
+.brands-tools-r { display: flex; align-items: center; gap: 16px; }
+
+/* ── FR-11 #91 · inline brand rename (zero-shift) ── */
+.brand-h1-wrap { display: inline-flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.brand-h1 { outline: none; }
+.brand-h1.is-edit { border-bottom: 3px solid var(--accent); padding-bottom: 2px; }
+.brand-h1-dot { color: var(--accent); }
+.brand-h1-actions { display: inline-flex; align-items: center; gap: 8px; padding-bottom: 10px; }
+.brand-h1-callout { flex-basis: 100%; min-width: 0; }
+.brand-h1-err {
+  flex-basis: 100%; font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.04em; color: var(--accent);
+}
+
+/* ── FR-11 #92 · delete (header rail + ✕ trigger; modals reuse FR-8 chrome) ── */
+.brand-head-rail { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.brand-del { display: inline-flex; align-items: center; gap: 10px; padding-bottom: 10px; }
+.bd-del-btn {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  background: var(--paper); border: 1px solid var(--line-2); color: var(--ink-4);
+  padding: 6px 12px; border-radius: 999px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.bd-del-btn:hover { border-color: var(--accent); color: var(--accent); }
+.bd-del-btn:disabled { opacity: 0.5; cursor: default; }
+.brand-del-err { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em; color: var(--accent); }
+
+/* Clean-delete Undo toast — fixed, bottom-center over the list (design Ask 06). */
+.toast-host { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 60; }
+.toast {
+  background: var(--ink); color: var(--paper);
+  border-radius: 6px; padding: 12px 14px 12px 18px;
+  display: inline-flex; align-items: center; gap: 16px;
+  box-shadow: 0 12px 28px -8px rgba(10, 14, 28, 0.40);
+  font-family: var(--body); font-size: 13.5px; font-weight: 500;
+}
+.toast-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
+.toast-msg b { font-weight: 700; }
+.toast-undo {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--paper);
+  background: transparent; border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 5px 11px; border-radius: 999px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.toast-undo:hover { border-color: var(--accent); }
+.toast-timer { font-family: var(--mono); font-size: 10px; letter-spacing: 0.10em; color: rgba(255, 255, 255, 0.5); }
+
 /* /app/brands — mobile (container ≤720px) — card-stack reorg */
 @container app (max-width: 720px) {
   .brands-tools {
@@ -1176,6 +1354,8 @@
   .brands-count { text-align: left; }
   .sort { align-self: stretch; justify-content: space-between; padding: 4px; }
   .sort-btn { flex: 1; text-align: center; }
+  .brands-tools-r { flex-direction: column; align-items: stretch; gap: 10px; }
+  .brands-tools-r .btn-pill { justify-content: center; }
 
   .brand-list {
     border: none;
@@ -1212,6 +1392,9 @@
   }
   .brand-name-t { font-size: 22px; }
   .brand-name-sub { display: none; }
+  /* FR-11 — the fresh-row hint hides on mobile; the Ready tag in the name +
+     the muted "No pitches" total carry the 0-pitch signal in the card. */
+  .brand-fresh-cta { display: none; }
 
   .brand-last {
     grid-area: last;

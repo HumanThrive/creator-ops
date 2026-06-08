@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { BrandsList } from '@/components/BrandsList'
 import { AddPitchTrigger } from '@/components/AddPitchTrigger'
+import { NewBrandTrigger } from '@/components/NewBrandTrigger'
 import { computePitchStats } from '@/lib/pitch-stats'
 import { computeBrandSummaries } from '@/lib/brand-stats'
 import type { Brand } from '@/lib/types/brand'
@@ -72,9 +73,13 @@ function BrandsEmptyState() {
         No brands yet.
       </h2>
       <p className="max-w-md text-ink-3">
-        Save your first pitch and your brand database starts here.
+        Paste your first pitch &mdash; or add a brand directly &mdash; and your
+        brand database starts here.
       </p>
-      <AddPitchTrigger className="btn-pill" label="Add pitch" />
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <AddPitchTrigger className="btn-pill" label="Add pitch" />
+        <NewBrandTrigger className="btn-pill is-ghost" label="+ New Brand" />
+      </div>
     </div>
   )
 }
