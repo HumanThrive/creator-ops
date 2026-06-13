@@ -1,13 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useState } from 'react'
 import type { BrandSummary } from '@/lib/brand-stats'
 import type { CurrencyTotal } from '@/lib/pitch-stats'
 import { formatCurrencyAmount } from '@/lib/pitch-stats'
 import { formatRelativeTime } from '@/lib/format'
 import { NewBrandTrigger } from '@/components/NewBrandTrigger'
 import { BrandDeleteToast } from '@/components/BrandDeleteToast'
+import { BrandCombineLauncher } from '@/components/BrandCombineLauncher'
 
 const PENDING_DELETE_KEY = 'pendingBrandDelete'
 
@@ -17,6 +19,15 @@ interface BrandsListProps {
   known: BrandSummary[]
   unknown: BrandSummary | null
   currencyTotals: CurrencyTotal[] // global, for the tools-row "$X TRACKED" line
+}
+
+// A picked brand carries everything onCombineClick needs (id + name + pitch
+// count for the default-survivor pick) so the click is resilient to a re-sorted
+// or re-rendered list — mirror of PeopleList's selection map.
+interface SelectedBrand {
+  id: string
+  name: string
+  pitch_count: number
 }
 
 function primaryAmount(b: BrandSummary): number {
@@ -37,6 +48,7 @@ function trackedSummary(currencyTotals: CurrencyTotal[]): string | null {
 }
 
 export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) {
+  const router = useRouter()
   const [sort, setSort] = useState<SortMode>('recent')
   // FR-11 #92 — a clean delete from a detail page hands off here via
   // sessionStorage; hide the row optimistically + mount the 5s Undo toast (which
@@ -44,6 +56,18 @@ export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) 
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(
     null,
   )
+
+  // FR-10 #97 — Story 4 proactive select-two (mirrors the /app/people affordance).
+  // "Select" flips rows into click-to-toggle; "Combine" enables at exactly two
+  // real brands selected (AC-M3 pairwise; the Unknown bucket is never selectable).
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selected, setSelected] = useState<Map<string, SelectedBrand>>(
+    () => new Map(),
+  )
+  const [combineOpen, setCombineOpen] = useState<{
+    survivorId: string
+    loserId: string
+  } | null>(null)
 
   useEffect(() => {
     const raw = sessionStorage.getItem(PENDING_DELETE_KEY)
@@ -61,6 +85,35 @@ export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) 
     }
   }, [])
 
+  const toggleRow = useCallback((brand: BrandSummary) => {
+    if (!brand.brand_id) return // Unknown bucket — not a real row
+    const id = brand.brand_id
+    setSelected((prev) => {
+      const next = new Map(prev)
+      if (next.has(id)) {
+        next.delete(id)
+        return next
+      }
+      if (next.size >= 2) return prev // pairwise cap (AC-M3)
+      next.set(id, { id, name: brand.displayName, pitch_count: brand.pitchCount })
+      return next
+    })
+  }, [])
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false)
+    setSelected(new Map())
+  }, [])
+
+  // AC1.4 — default survivor = the brand with more linked pitches.
+  function onCombineClick() {
+    if (selected.size !== 2) return
+    const [a, b] = Array.from(selected.values())
+    const survivor = a.pitch_count >= b.pitch_count ? a : b
+    const loser = survivor.id === a.id ? b : a
+    setCombineOpen({ survivorId: survivor.id, loserId: loser.id })
+  }
+
   const sortedKnown = [...known].sort((a, b) => {
     if (sort === 'value') {
       const diff = primaryAmount(b) - primaryAmount(a)
@@ -76,6 +129,7 @@ export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) 
 
   const totalBrandCount = visibleKnown.length + (unknown ? 1 : 0)
   const tracked = trackedSummary(currencyTotals)
+  const canSelect = visibleKnown.length >= 2
 
   return (
     <>
@@ -90,32 +144,80 @@ export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) 
           )}
         </span>
         <div className="brands-tools-r">
-          <div className="sort">
-            <span className="sort-l">Sort</span>
-            <button
-              type="button"
-              className={`sort-btn ${sort === 'recent' ? 'active' : ''}`}
-              onClick={() => setSort('recent')}
-            >
-              Recent
-            </button>
-            <button
-              type="button"
-              className={`sort-btn ${sort === 'value' ? 'active' : ''}`}
-              onClick={() => setSort('value')}
-            >
-              By value
-            </button>
-          </div>
-          <NewBrandTrigger />
+          {!selectionMode && (
+            <div className="sort">
+              <span className="sort-l">Sort</span>
+              <button
+                type="button"
+                className={`sort-btn ${sort === 'recent' ? 'active' : ''}`}
+                onClick={() => setSort('recent')}
+              >
+                Recent
+              </button>
+              <button
+                type="button"
+                className={`sort-btn ${sort === 'value' ? 'active' : ''}`}
+                onClick={() => setSort('value')}
+              >
+                By value
+              </button>
+            </div>
+          )}
+          {/* FR-10 #97 — Select / Combine / Cancel. Hide "+ New Brand" in select
+              mode (goal-directed: pick 2 → Combine), mirror of PeopleList. */}
+          {selectionMode ? (
+            <>
+              <button
+                type="button"
+                className={`sort-btn ${selected.size === 2 ? 'is-primary' : ''}`}
+                onClick={onCombineClick}
+                disabled={selected.size !== 2}
+                aria-label="Combine the two selected brands"
+              >
+                Combine {selected.size}/2 →
+              </button>
+              <button type="button" className="sort-btn" onClick={exitSelectionMode}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              {canSelect && (
+                <button
+                  type="button"
+                  className="sort-btn"
+                  onClick={() => setSelectionMode(true)}
+                  aria-label="Enter selection mode to combine two brands"
+                >
+                  Select
+                </button>
+              )}
+              <NewBrandTrigger />
+            </>
+          )}
         </div>
       </div>
 
-      <div className="brand-list">
+      <div className={`brand-list ${selectionMode ? 'is-selection-mode' : ''}`}>
         {visibleKnown.map((b, i) => (
-          <BrandRow key={b.routeSegment} brand={b} rank={String(i + 1).padStart(2, '0')} />
+          <BrandRow
+            key={b.routeSegment}
+            brand={b}
+            rank={String(i + 1).padStart(2, '0')}
+            selectionMode={selectionMode}
+            isSelected={b.brand_id ? selected.has(b.brand_id) : false}
+            onToggle={toggleRow}
+          />
         ))}
-        {unknown && <BrandRow brand={unknown} rank="—" />}
+        {unknown && (
+          <BrandRow
+            brand={unknown}
+            rank="—"
+            selectionMode={selectionMode}
+            isSelected={false}
+            onToggle={toggleRow}
+          />
+        )}
       </div>
       {pendingDelete ? (
         <BrandDeleteToast
@@ -124,20 +226,52 @@ export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) 
           onDone={() => setPendingDelete(null)}
         />
       ) : null}
+      {combineOpen ? (
+        <BrandCombineLauncher
+          seed={{
+            mode: 'pair',
+            survivorId: combineOpen.survivorId,
+            loserId: combineOpen.loserId,
+          }}
+          onClose={() => {
+            setCombineOpen(null)
+            exitSelectionMode()
+            // Refresh to pick up the post-merge state (loser gone, survivor
+            // enriched). Cheap no-op if the user cancelled mid-flow.
+            router.refresh()
+          }}
+        />
+      ) : null}
     </>
   )
 }
 
-function BrandRow({ brand, rank }: { brand: BrandSummary; rank: string }) {
+interface BrandRowProps {
+  brand: BrandSummary
+  rank: string
+  selectionMode: boolean
+  isSelected: boolean
+  onToggle: (brand: BrandSummary) => void
+}
+
+function BrandRow({ brand, rank, selectionMode, isSelected, onToggle }: BrandRowProps) {
+  const selectable = selectionMode && !brand.isUnknown
+  const href = `/app/brands/${brand.routeSegment}`
+
   // FR-11 AC1.3 — 0-pitch "Ready" row (Direction A · dashed marker). A real brand
   // with no pitches yet (just created, or emptied) reads as ready-to-track, not
   // broken: dashed Ready tag beside the name + a single next-step hint spanning
   // the data columns + a muted "No pitches" total. Same height/grid as populated.
   if (brand.pitchCount === 0 && !brand.isUnknown) {
     return (
-      <Link
-        href={`/app/brands/${brand.routeSegment}`}
-        className="brand-row is-fresh-a"
+      <RowShell
+        brand={brand}
+        href={href}
+        baseClass="brand-row is-fresh-a"
+        selectionMode={selectionMode}
+        selectable={selectable}
+        isSelected={isSelected}
+        onToggle={onToggle}
       >
         <span className="brand-rank">{rank}</span>
         <div className="brand-name">
@@ -155,7 +289,7 @@ function BrandRow({ brand, rank }: { brand: BrandSummary; rank: string }) {
         <span className="brand-total muted">No pitches</span>
         <span className="brand-arrow">&rarr;</span>
         <span className="brand-row-divider" aria-hidden="true" />
-      </Link>
+      </RowShell>
     )
   }
 
@@ -166,7 +300,15 @@ function BrandRow({ brand, rank }: { brand: BrandSummary; rank: string }) {
       : 'Repeat customer'
 
   return (
-    <Link href={`/app/brands/${brand.routeSegment}`} className="brand-row">
+    <RowShell
+      brand={brand}
+      href={href}
+      baseClass="brand-row"
+      selectionMode={selectionMode}
+      selectable={selectable}
+      isSelected={isSelected}
+      onToggle={onToggle}
+    >
       <span className="brand-rank">{rank}</span>
       <div className="brand-name">
         <span className={`brand-name-t ${brand.isUnknown ? 'unknown' : ''}`}>
@@ -183,7 +325,65 @@ function BrandRow({ brand, rank }: { brand: BrandSummary; rank: string }) {
       <BrandTotal brand={brand} />
       <span className="brand-arrow">→</span>
       <span className="brand-row-divider" aria-hidden="true" />
-    </Link>
+    </RowShell>
+  )
+}
+
+// Wraps a brand row: a <Link> in normal mode, a click-to-toggle <button> when
+// selecting a real brand, or a non-interactive <div> for the Unknown bucket
+// during select mode (AC-M3 — never selectable). The select mark is rendered
+// only in select mode and is absolutely positioned (CSS) so it doesn't consume a
+// grid cell.
+function RowShell({
+  brand,
+  href,
+  baseClass,
+  selectionMode,
+  selectable,
+  isSelected,
+  onToggle,
+  children,
+}: {
+  brand: BrandSummary
+  href: string
+  baseClass: string
+  selectionMode: boolean
+  selectable: boolean
+  isSelected: boolean
+  onToggle: (brand: BrandSummary) => void
+  children: React.ReactNode
+}) {
+  if (!selectionMode) {
+    return (
+      <Link href={href} className={baseClass}>
+        {children}
+      </Link>
+    )
+  }
+
+  const mark = <span className="brand-select-mark" aria-hidden="true" />
+
+  if (!selectable) {
+    // Unknown bucket — visible but inert during select mode.
+    return (
+      <div className={`${baseClass} is-noselect`} aria-disabled="true">
+        {mark}
+        {children}
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      className={`${baseClass}${isSelected ? ' is-selected' : ''}`}
+      onClick={() => onToggle(brand)}
+      aria-pressed={isSelected}
+      aria-label={`${isSelected ? 'Deselect' : 'Select'} ${brand.displayName}`}
+    >
+      {mark}
+      {children}
+    </button>
   )
 }
 

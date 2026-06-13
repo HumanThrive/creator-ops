@@ -177,6 +177,7 @@ export function BrandNameEditor({
           <DupBrandCallout
             attemptedName={savedName}
             existing={collision}
+            selfBrandId={brandId}
             onDismiss={() => setCollision(null)}
           />
         </div>

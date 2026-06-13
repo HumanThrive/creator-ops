@@ -8502,3 +8502,23 @@ button.contacts-table-row:last-child {
   .cw-rstat-v { font-size: 28px; }
   .cw-result-stat { padding: 12px 12px; }
 }
+
+/* FR-10 #97 · /app/brands select-two (Story 4). Mirrors the people select-two
+   mechanism; the tick mark is absolute-positioned so it never re-grids the
+   existing .brand-row tracks (avoids the FR-11 column-alignment trap). */
+.brand-list.is-selection-mode .brand-row { position: relative; padding-left: 44px; cursor: pointer; }
+.brand-list.is-selection-mode button.brand-row {
+  appearance: none; -webkit-appearance: none; width: 100%; text-align: left;
+  font: inherit; color: inherit; background: var(--paper);
+}
+.brand-list.is-selection-mode .brand-row.is-noselect { cursor: not-allowed; opacity: 0.6; }
+.brand-select-mark {
+  position: absolute; left: 18px; top: 50%; transform: translateY(-50%);
+  width: 17px; height: 17px; border-radius: 4px; border: 1.5px solid var(--line-2);
+  background: var(--paper); display: grid; place-items: center;
+  transition: background 0.12s, border-color 0.12s;
+}
+.brand-row.is-selected { background: color-mix(in oklab, var(--pick) 5%, var(--paper)); box-shadow: inset 2px 0 0 var(--pick); }
+.brand-row.is-selected .brand-select-mark { background: var(--pick); border-color: var(--pick); }
+.brand-row.is-selected .brand-select-mark::after { content: "✓"; color: #fff; font-family: var(--mono); font-size: 11px; line-height: 1; }
+.brand-row.is-noselect .brand-select-mark { border-style: dashed; background: var(--paper-3); }
