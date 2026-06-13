@@ -8522,3 +8522,37 @@ button.contacts-table-row:last-child {
 .brand-row.is-selected .brand-select-mark { background: var(--pick); border-color: var(--pick); }
 .brand-row.is-selected .brand-select-mark::after { content: "✓"; color: #fff; font-family: var(--mono); font-size: 11px; line-height: 1; }
 .brand-row.is-noselect .brand-select-mark { border-style: dashed; background: var(--paper-3); }
+
+/* Select toggle (tools row) + combine bar (appears at exactly two selected).
+   Matches the fr10-select-two panel (Founder 2026-06-13: match the mockup;
+   the /app/people button form aligns later via a CR). */
+.select-toggle {
+  display: inline-flex; align-items: center; gap: 9px; font-family: var(--mono);
+  font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--pick); border: 1px solid var(--pick);
+  background: color-mix(in oklab, var(--pick) 7%, var(--paper));
+  border-radius: 999px; padding: 7px 14px; cursor: pointer;
+}
+.select-toggle::before { content: ""; width: 6px; height: 6px; border-radius: 2px; background: var(--pick); }
+.select-toggle:hover { background: color-mix(in oklab, var(--pick) 12%, var(--paper)); }
+
+.combine-bar {
+  margin: 14px 0 0; border: 1px solid var(--pick); border-radius: 6px;
+  background: color-mix(in oklab, var(--pick) 6%, var(--paper));
+  padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;
+  gap: 18px; flex-wrap: wrap;
+}
+.combine-bar-l { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.combine-bar-k {
+  font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--pick); display: inline-flex; align-items: center; gap: 8px;
+}
+.combine-bar-k::before { content: "✓"; }
+.combine-bar-t { font-family: var(--body); font-size: 14.5px; color: var(--ink-2); }
+.combine-bar-t b { color: var(--ink); font-weight: 600; }
+.combine-bar-r { display: inline-flex; align-items: center; gap: 14px; flex: 0 0 auto; }
+.combine-clear {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-3); background: none; border: none; cursor: pointer; padding: 8px 0;
+}
+.combine-clear:hover { color: var(--ink); }

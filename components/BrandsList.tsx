@@ -130,6 +130,7 @@ export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) 
   const totalBrandCount = visibleKnown.length + (unknown ? 1 : 0)
   const tracked = trackedSummary(currencyTotals)
   const canSelect = visibleKnown.length >= 2
+  const selectedList = Array.from(selected.values())
 
   return (
     <>
@@ -163,29 +164,25 @@ export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) 
               </button>
             </div>
           )}
-          {/* FR-10 #97 — Select / Combine / Cancel. Hide "+ New Brand" in select
-              mode (goal-directed: pick 2 → Combine), mirror of PeopleList. */}
+          {/* FR-10 #97 — Select toggle. Hide "+ New Brand" in select mode
+              (goal-directed: pick 2 → Combine via the combine-bar below). The
+              Combine action itself lives in the .combine-bar (design Ask · Founder
+              2026-06-13: match the select-two mockup). */}
           {selectionMode ? (
-            <>
-              <button
-                type="button"
-                className={`sort-btn ${selected.size === 2 ? 'is-primary' : ''}`}
-                onClick={onCombineClick}
-                disabled={selected.size !== 2}
-                aria-label="Combine the two selected brands"
-              >
-                Combine {selected.size}/2 →
-              </button>
-              <button type="button" className="sort-btn" onClick={exitSelectionMode}>
-                Cancel
-              </button>
-            </>
+            <button
+              type="button"
+              className="select-toggle is-on"
+              onClick={exitSelectionMode}
+              aria-label="Exit selection mode"
+            >
+              Selecting · {selected.size} of 2
+            </button>
           ) : (
             <>
               {canSelect && (
                 <button
                   type="button"
-                  className="sort-btn"
+                  className="select-toggle"
                   onClick={() => setSelectionMode(true)}
                   aria-label="Enter selection mode to combine two brands"
                 >
@@ -197,6 +194,30 @@ export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) 
           )}
         </div>
       </div>
+
+      {selectionMode && selectedList.length === 2 && (
+        <div className="combine-bar">
+          <div className="combine-bar-l">
+            <span className="combine-bar-k">2 brands selected</span>
+            <span className="combine-bar-t">
+              Combine <b>{selectedList[0].name}</b> + <b>{selectedList[1].name}</b>{' '}
+              into one brand — keeps the bigger history, you pick the name.
+            </span>
+          </div>
+          <div className="combine-bar-r">
+            <button
+              type="button"
+              className="combine-clear"
+              onClick={() => setSelected(new Map())}
+            >
+              Clear
+            </button>
+            <button type="button" className="btn-pill" onClick={onCombineClick}>
+              Combine into one →
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className={`brand-list ${selectionMode ? 'is-selection-mode' : ''}`}>
         {visibleKnown.map((b, i) => (
