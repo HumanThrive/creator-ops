@@ -131,6 +131,16 @@ export interface BrandPitchHistoryItem {
   current_currency: string | null
 }
 
+// Aggregate deal totals across a set of pitches (review column / merged preview).
+// "Closed" = deals in a committed stage (confirmed | delivered). Totals are grouped
+// by currency (a solo creator is usually single-currency, but mixing is possible);
+// the wizard renders the dominant currency + a "+N more" when several exist.
+export interface DealSummary {
+  closed_count: number
+  // Summed closed-deal amount per currency, sorted by amount desc.
+  closed_totals: { currency: string; amount: number }[]
+}
+
 export interface BrandSurvivorPreview {
   survivor_id: string
   // Resolved brand name.
@@ -145,6 +155,8 @@ export interface BrandSurvivorPreview {
   contact_links: ContactLinkPreview[]
   // Unified pitch history, sorted by created_at desc.
   pitch_history: BrandPitchHistoryItem[]
+  // Combined deal totals across all merged pitches (AC3.1 "combined deal totals").
+  deal_summary: DealSummary
 }
 
 // ============================================================================
@@ -219,11 +231,15 @@ function computeContactLinkResolutionDefault(
     return { role, ended_at: null, ended_reason: null }
   }
 
-  // Both ended → default most-recent.
+  // Both ended → default to the most-recent ending, carrying THAT side's
+  // role + reason as one unit (the link record is picked whole, per the locked
+  // design's both-ended chooser — picking "the duplicate's ending" adopts the
+  // duplicate's role too). Differs from FR-9's contact-merge (separate role/state
+  // cards); the brand design couples them into one ended chooser per contact.
   if (loser.ended_at > survivor.ended_at) {
-    return { role, ended_at: loser.ended_at, ended_reason: loser.ended_reason }
+    return { role: loser.role, ended_at: loser.ended_at, ended_reason: loser.ended_reason }
   }
-  return { role, ended_at: survivor.ended_at, ended_reason: survivor.ended_reason }
+  return { role: survivor.role, ended_at: survivor.ended_at, ended_reason: survivor.ended_reason }
 }
 
 // ============================================================================
@@ -249,6 +265,7 @@ export function computeBrandMergeResult(
     previous_slugs,
     contact_links,
     pitch_history,
+    deal_summary: summarizeDeals(inputs.pitches),
   }
 
   const payload: BrandMergePayload = {
@@ -369,6 +386,37 @@ function buildPitchHistory(inputs: BrandMergeInputs): BrandPitchHistoryItem[] {
       current_amount: p.deal_current_amount,
       current_currency: p.deal_current_currency,
     }))
+}
+
+// ----------------------------------------------------------------------------
+// Deal aggregation — closed-deal count + per-currency totals (AC2.1 / AC3.1)
+// ----------------------------------------------------------------------------
+
+// A deal is "closed" once it reaches a committed stage. inbox / negotiating are
+// in-flight; rejected is a non-success exit. Exported so the wizard's Step-1
+// review columns and Step-3 combined preview share one definition.
+const CLOSED_STAGES: ReadonlySet<DealStage> = new Set(['confirmed', 'delivered'])
+
+export function summarizeDeals(
+  pitches: BrandPitchWithProvenance[],
+): DealSummary {
+  const byCurrency = new Map<string, number>()
+  let closed_count = 0
+  for (const p of pitches) {
+    if (!p.deal_stage || !CLOSED_STAGES.has(p.deal_stage)) continue
+    closed_count++
+    if (p.deal_current_amount != null && p.deal_current_currency) {
+      byCurrency.set(
+        p.deal_current_currency,
+        (byCurrency.get(p.deal_current_currency) ?? 0) + p.deal_current_amount,
+      )
+    }
+  }
+  const closed_totals = Array.from(byCurrency, ([currency, amount]) => ({
+    currency,
+    amount,
+  })).sort((a, b) => b.amount - a.amount)
+  return { closed_count, closed_totals }
 }
 
 // ----------------------------------------------------------------------------
