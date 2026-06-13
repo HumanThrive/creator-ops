@@ -122,5 +122,23 @@ export async function POST(request: Request) {
     )
   }
 
+  // CR-9 (2026-06-13): rewrite the denormalized pitches.brand_name label so the
+  // Kanban PitchCard / PitchFeed / RelationshipLens / BrandHistoryTable (which read
+  // pitches.brand_name directly — /app queries pitches.* with NO brands join) reflect
+  // the new name. Same statement-shape as merge_brands step 5. Best-effort +
+  // display-only: the rename above already succeeded; a failure here leaves stale
+  // labels (the pre-CR-9 state), not a broken rename — so we log and still return
+  // success. `.neq` covers every real row: a branded pitch always carries a non-null
+  // brand_name (the ingest field brand_id is derived from), so there is no
+  // brand_name-IS-NULL row to miss.
+  const { error: relabelErr } = await supabase
+    .from('pitches')
+    .update({ brand_name: name })
+    .eq('brand_id', brand_id)
+    .neq('brand_name', name)
+  if (relabelErr) {
+    console.error('[api/brands/update] pitch relabel failed:', relabelErr.message)
+  }
+
   return Response.json({ success: true, slug: nextSlug, name })
 }
