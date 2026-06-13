@@ -8536,8 +8536,23 @@ button.contacts-table-row:last-child {
 .select-toggle::before { content: ""; width: 6px; height: 6px; border-radius: 2px; background: var(--pick); }
 .select-toggle:hover { background: color-mix(in oklab, var(--pick) 12%, var(--paper)); }
 
+/* Wrapper animates the bar in/out: slide-down + fade on enter, slide-up + fade
+   on exit. grid-template-rows 0fr→1fr drives the height morph (the .combine-bar
+   grid item carries overflow:hidden + min-height:0). Stays mounted through select
+   mode so the exit transition can play. */
+.combine-bar-wrap {
+  display: grid; grid-template-rows: 0fr; margin-top: 0;
+  opacity: 0; transform: translateY(-8px);
+  transition: grid-template-rows 200ms ease, opacity 200ms ease,
+              transform 200ms ease, margin-top 200ms ease;
+}
+.combine-bar-wrap.is-shown {
+  grid-template-rows: 1fr; margin-top: 14px; opacity: 1; transform: translateY(0);
+}
+.combine-bar-wrap:not(.is-shown) { pointer-events: none; }
 .combine-bar {
-  margin: 14px 0 0; border: 1px solid var(--pick); border-radius: 6px;
+  overflow: hidden; min-height: 0; margin: 0;
+  border: 1px solid var(--pick); border-radius: 6px;
   background: color-mix(in oklab, var(--pick) 6%, var(--paper));
   padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;
   gap: 18px; flex-wrap: wrap;

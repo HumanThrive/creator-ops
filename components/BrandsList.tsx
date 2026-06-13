@@ -68,6 +68,9 @@ export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) 
     survivorId: string
     loserId: string
   } | null>(null)
+  // Names shown in the combine-bar. Captured when exactly two are selected and
+  // NOT cleared on drop, so the names persist while the bar animates out.
+  const [barPair, setBarPair] = useState<[string, string] | null>(null)
 
   useEffect(() => {
     const raw = sessionStorage.getItem(PENDING_DELETE_KEY)
@@ -84,6 +87,17 @@ export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) 
       /* ignore malformed hand-off */
     }
   }, [])
+
+  // Capture the selected pair's names for the combine-bar's exit animation —
+  // fires only when selection reaches two; NOT cleared on drop, so the names
+  // stay put while the bar slides up. Keyed on `selected` (changes per toggle);
+  // one-shot, no cascade.
+  useEffect(() => {
+    if (selected.size !== 2) return
+    const [a, b] = Array.from(selected.values())
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBarPair([a.name, b.name])
+  }, [selected])
 
   const toggleRow = useCallback((brand: BrandSummary) => {
     if (!brand.brand_id) return // Unknown bucket — not a real row
@@ -130,7 +144,7 @@ export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) 
   const totalBrandCount = visibleKnown.length + (unknown ? 1 : 0)
   const tracked = trackedSummary(currencyTotals)
   const canSelect = visibleKnown.length >= 2
-  const selectedList = Array.from(selected.values())
+  const barShown = selectionMode && selected.size === 2
 
   return (
     <>
@@ -195,26 +209,40 @@ export function BrandsList({ known, unknown, currencyTotals }: BrandsListProps) 
         </div>
       </div>
 
-      {selectionMode && selectedList.length === 2 && (
-        <div className="combine-bar">
-          <div className="combine-bar-l">
-            <span className="combine-bar-k">2 brands selected</span>
-            <span className="combine-bar-t">
-              Combine <b>{selectedList[0].name}</b> + <b>{selectedList[1].name}</b>{' '}
-              into one brand — keeps the bigger history, you pick the name.
-            </span>
-          </div>
-          <div className="combine-bar-r">
-            <button
-              type="button"
-              className="combine-clear"
-              onClick={() => setSelected(new Map())}
-            >
-              Clear
-            </button>
-            <button type="button" className="btn-pill" onClick={onCombineClick}>
-              Combine into one →
-            </button>
+      {/* Stays mounted through select mode; the wrapper animates open/closed via
+          CSS (slide-down in · slide-up + fade out). Names come from barPair so
+          they persist while it collapses after the selection drops below 2. */}
+      {selectionMode && (
+        <div
+          className={`combine-bar-wrap ${barShown ? 'is-shown' : ''}`}
+          aria-hidden={!barShown}
+        >
+          <div className="combine-bar">
+            <div className="combine-bar-l">
+              <span className="combine-bar-k">2 brands selected</span>
+              <span className="combine-bar-t">
+                Combine <b>{barPair?.[0]}</b> + <b>{barPair?.[1]}</b> into one
+                brand — keeps the bigger history, you pick the name.
+              </span>
+            </div>
+            <div className="combine-bar-r">
+              <button
+                type="button"
+                className="combine-clear"
+                onClick={() => setSelected(new Map())}
+                tabIndex={barShown ? undefined : -1}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                className="btn-pill"
+                onClick={onCombineClick}
+                tabIndex={barShown ? undefined : -1}
+              >
+                Combine into one →
+              </button>
+            </div>
           </div>
         </div>
       )}
