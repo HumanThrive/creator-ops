@@ -8454,3 +8454,120 @@ button.contacts-table-row:last-child {
   .cw-foot-r { flex: 1 1 auto; justify-content: flex-end; }
   .cw-foot-r > .btn-ghost { margin-right: auto; }
 }
+
+/* ============================================================================
+ * FR-10 · Combine BRANDS — brand-variant additions to the shared .cw-* chrome.
+ * The contact wizard (FR-9) reuses everything above; these are the brand-only
+ * surfaces it has no analogue for: the Step-1 contacts list (replaces FR-9's
+ * channels/brand cells), the Step-3 combined-totals 3-stat, and the Step-3
+ * consolidated contacts table. Roles render via the FR-8 `.ctc-role` pill.
+ * Source: docs/design/.../crm/fr10-panels/fr10-combine-wizard.html (locked).
+ * ========================================================================== */
+
+/* Step-2 per-contact conflict marker (◷ = a relationship decision, not identity) */
+.cw-conflict.is-contact .cw-conflict-title::before { content: "◷ "; color: var(--ink-3); }
+
+/* Step-1 review · contacts list (one line per linked Contact) */
+.cw-contacts { display: flex; flex-direction: column; }
+.cw-contactline { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.cw-contactline + .cw-contactline { border-top: 1px dashed var(--line); }
+.cw-contactline-name { font-family: var(--body); font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.cw-contactline.is-ended .cw-contactline-name { color: var(--ink-3); }
+.cw-state { font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-4); margin-left: auto; flex: 0 0 auto; }
+.cw-state.is-ended { border: 1px dashed var(--line-2); border-radius: 3px; padding: 2px 6px; }
+
+/* Step-3 preview · slug-redirect note under the result head */
+.cw-result-slugnote { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.06em; color: var(--ink-4); }
+.cw-result-slugnote code { color: var(--ink-3); }
+
+/* Step-3 preview · combined-totals 3-stat (reuses the StatsStrip [NN] grammar) */
+.cw-result-stats { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line-board); border-radius: 5px; overflow: hidden; background: var(--paper-board); }
+.cw-result-stat { padding: 14px 18px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cw-result-stat + .cw-result-stat { border-left: 1px solid var(--line-board); }
+.cw-rstat-n { font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em; color: var(--ink-4); }
+.cw-rstat-v { font-family: var(--display); font-weight: 400; font-size: 38px; line-height: 1; letter-spacing: 0.005em; color: var(--ink); overflow-wrap: anywhere; }
+.cw-rstat-v.is-accent { color: var(--accent); }
+.cw-rstat-l { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); margin-top: 3px; }
+
+/* Step-3 preview · consolidated contacts table */
+.cw-result-contacts { border: 1px solid var(--line-board); border-radius: 5px; overflow: hidden; }
+.cw-crow { display: grid; grid-template-columns: 1fr auto auto; gap: 14px; align-items: center; padding: 11px 16px; background: var(--paper); border-top: 1px solid var(--line); }
+.cw-crow:first-child { border-top: 0; }
+.cw-crow.is-from-dup { background: color-mix(in oklab, var(--pick) 5%, var(--paper)); }
+.cw-crow.is-ended { opacity: 0.8; }
+.cw-crow-name { font-family: var(--body); font-size: 14px; font-weight: 600; color: var(--ink); display: inline-flex; align-items: center; gap: 9px; min-width: 0; }
+.cw-crow-origin { font-family: var(--mono); font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pick); border: 1px solid var(--pick); border-radius: 3px; padding: 1px 5px; flex: 0 0 auto; }
+
+@container app (max-width: 720px) {
+  .cw-rstat-v { font-size: 28px; }
+  .cw-result-stat { padding: 12px 12px; }
+}
+
+/* FR-10 #97 · /app/brands select-two (Story 4). Mirrors the people select-two
+   mechanism; the tick mark is absolute-positioned so it never re-grids the
+   existing .brand-row tracks (avoids the FR-11 column-alignment trap). */
+.brand-list.is-selection-mode .brand-row { position: relative; padding-left: 44px; cursor: pointer; }
+.brand-list.is-selection-mode button.brand-row {
+  appearance: none; -webkit-appearance: none; width: 100%; text-align: left;
+  font: inherit; color: inherit; background: var(--paper);
+}
+.brand-list.is-selection-mode .brand-row.is-noselect { cursor: not-allowed; opacity: 0.6; }
+.brand-select-mark {
+  position: absolute; left: 18px; top: 50%; transform: translateY(-50%);
+  width: 17px; height: 17px; border-radius: 4px; border: 1.5px solid var(--line-2);
+  background: var(--paper); display: grid; place-items: center;
+  transition: background 0.12s, border-color 0.12s;
+}
+.brand-row.is-selected { background: color-mix(in oklab, var(--pick) 5%, var(--paper)); box-shadow: inset 2px 0 0 var(--pick); }
+.brand-row.is-selected .brand-select-mark { background: var(--pick); border-color: var(--pick); }
+.brand-row.is-selected .brand-select-mark::after { content: "✓"; color: #fff; font-family: var(--mono); font-size: 11px; line-height: 1; }
+.brand-row.is-noselect .brand-select-mark { border-style: dashed; background: var(--paper-3); }
+
+/* Select toggle (tools row) + combine bar (appears at exactly two selected).
+   Matches the fr10-select-two panel (Founder 2026-06-13: match the mockup;
+   the /app/people button form aligns later via a CR). */
+.select-toggle {
+  display: inline-flex; align-items: center; gap: 9px; font-family: var(--mono);
+  font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--pick); border: 1px solid var(--pick);
+  background: color-mix(in oklab, var(--pick) 7%, var(--paper));
+  border-radius: 999px; padding: 7px 14px; cursor: pointer;
+}
+.select-toggle::before { content: ""; width: 6px; height: 6px; border-radius: 2px; background: var(--pick); }
+.select-toggle:hover { background: color-mix(in oklab, var(--pick) 12%, var(--paper)); }
+
+/* Wrapper animates the bar in/out: slide-down + fade on enter, slide-up + fade
+   on exit. grid-template-rows 0fr→1fr drives the height morph (the .combine-bar
+   grid item carries overflow:hidden + min-height:0). Stays mounted through select
+   mode so the exit transition can play. */
+.combine-bar-wrap {
+  display: grid; grid-template-rows: 0fr; margin-top: 0;
+  opacity: 0; transform: translateY(-8px);
+  transition: grid-template-rows 200ms ease, opacity 200ms ease,
+              transform 200ms ease, margin-top 200ms ease;
+}
+.combine-bar-wrap.is-shown {
+  grid-template-rows: 1fr; margin-top: 14px; opacity: 1; transform: translateY(0);
+}
+.combine-bar-wrap:not(.is-shown) { pointer-events: none; }
+.combine-bar {
+  overflow: hidden; min-height: 0; margin: 0;
+  border: 1px solid var(--pick); border-radius: 6px;
+  background: color-mix(in oklab, var(--pick) 6%, var(--paper));
+  padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;
+  gap: 18px; flex-wrap: wrap;
+}
+.combine-bar-l { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.combine-bar-k {
+  font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--pick); display: inline-flex; align-items: center; gap: 8px;
+}
+.combine-bar-k::before { content: "✓"; }
+.combine-bar-t { font-family: var(--body); font-size: 14.5px; color: var(--ink-2); }
+.combine-bar-t b { color: var(--ink); font-weight: 600; }
+.combine-bar-r { display: inline-flex; align-items: center; gap: 14px; flex: 0 0 auto; }
+.combine-clear {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-3); background: none; border: none; cursor: pointer; padding: 8px 0;
+}
+.combine-clear:hover { color: var(--ink); }

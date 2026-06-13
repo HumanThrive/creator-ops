@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { BrandCombineStub } from '@/components/BrandCombineStub'
+import { BrandCombineLauncher } from '@/components/BrandCombineLauncher'
 import type { ExistingBrand } from '@/components/DupBrandCallout'
 
 // FR-11 #92 (design Ask 06 Outcome 1) — informational blocked-delete modal for a
@@ -139,7 +139,15 @@ export function BrandDeleteBlockedModal({
       </div>
 
       {combineOpen ? (
-        <BrandCombineStub existing={existing} onClose={() => setCombineOpen(false)} />
+        <BrandCombineLauncher
+          seed={{
+            mode: 'pick',
+            knownId: existing.id,
+            knownName: existing.name || brandName,
+            knownRole: 'loser',
+          }}
+          onClose={() => setCombineOpen(false)}
+        />
       ) : null}
     </>
   )
